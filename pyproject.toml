@@ -1,11 +1,21 @@
 [project]
 name = "learnersmcp"
 version = "0.1.0"
-description = "Add your description here"
+description = "DSA spaced-repetition MCP server: store problems, track mistakes, get due revisions"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
     "mcp[cli]>=2.2.0",
+    "psycopg[binary]>=3.3.6",
+    "sqlalchemy>=2",
     "uvicorn[standard]>=0.53.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

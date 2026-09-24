@@ -5,7 +5,7 @@ description = "DSA spaced-repetition MCP server: store problems, track mistakes,
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.141.1",
+    "fastapi[standard]>=0.141.1",
     "mcp[cli]>=2.2.0",
     "psycopg[binary]>=3.3.6",
     "sqlalchemy>=2",

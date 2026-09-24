@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from mcp.server.transport_security import TransportSecuritySettings
 
 import db
 from mcp_server import mcp
@@ -9,7 +10,12 @@ from mcp_server import mcp
 logger = logging.getLogger("learnersmcp")
 logging.basicConfig(level=logging.INFO)
 
-mcp_app = mcp.streamable_http_app()
+# Public deployment: the SDK's default DNS-rebinding protection only allows
+# localhost hosts/origins, which would reject every external client
+# (Cursor pointed at the deployed URL, Cloudflare proxy headers, etc.).
+mcp_app = mcp.streamable_http_app(
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False)
+)
 
 
 @asynccontextmanager

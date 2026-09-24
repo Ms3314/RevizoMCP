@@ -45,3 +45,28 @@ class Attempt(Base):
 
     def __repr__(self) -> str:
         return f"<Attempt problem={self.problem_pk} date={self.attempt_date} solved={self.solved}>"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    supabase_sub: Mapped[str] = mapped_column(String, nullable=False, unique=True)
+    email: Mapped[str] = mapped_column(String, nullable=False, default="")
+    display_name: Mapped[str] = mapped_column(String, nullable=False, default="")
+    leetcode_username: Mapped[str] = mapped_column(String, nullable=False, default="")
+    leetcode_session: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    last_synced_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
+
+    def __repr__(self) -> str:
+        return f"<User {self.email!r} sub={self.supabase_sub[:8]}>"
+
+
+class OAuthClient(Base):
+    __tablename__ = "oauth_clients"
+
+    client_id: Mapped[str] = mapped_column(String, primary_key=True)
+    redirect_uris: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    client_name: Mapped[str] = mapped_column(String, nullable=False, default="")
+    created_at: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)

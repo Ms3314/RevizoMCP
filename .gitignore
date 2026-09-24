@@ -21,6 +21,7 @@ env/
 .env
 .env.*
 !.env.example
+.app_secret
 
 # Testing / coverage
 .pytest_cache/

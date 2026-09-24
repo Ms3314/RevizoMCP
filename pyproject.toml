@@ -1,7 +1,7 @@
 [project]
-name = "learnersmcp"
+name = "revizo"
 version = "0.1.0"
-description = "DSA spaced-repetition MCP server: store problems, track mistakes, get due revisions"
+description = "Revizo - spaced-repetition revision coach for DSA problems, as an MCP server: due lists, mistake tracking, weak points, LeetCode sync"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

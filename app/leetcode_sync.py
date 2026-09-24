@@ -1,5 +1,4 @@
 import json
-import os
 import time
 import urllib.error
 import urllib.request
@@ -16,7 +15,9 @@ GRAPHQL_PACE_SECONDS = 0.4
 _question_cache: dict[str, dict] | None = None
 
 
-def _graphql(query: str, variables: dict | None = None) -> dict:
+def _graphql(
+    query: str, variables: dict | None = None, session_cookie: str | None = None
+) -> dict:
     payload = json.dumps({"query": query, "variables": variables or {}}).encode()
     headers = {
         "Content-Type": "application/json",
@@ -27,9 +28,9 @@ def _graphql(query: str, variables: dict | None = None) -> dict:
             "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
         ),
     }
-    session_cookie = os.getenv("LEETCODE_SESSION", "").strip()
-    if session_cookie:
-        headers["Cookie"] = f"LEETCODE_SESSION={session_cookie}"
+    cookie = (session_cookie or "").strip()
+    if cookie:
+        headers["Cookie"] = f"LEETCODE_SESSION={cookie}"
     req = urllib.request.Request(LEETCODE_GRAPHQL_URL, data=payload, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -109,11 +110,13 @@ def fetch_recent_acs(username: str, limit: int = 200) -> list[dict]:
     ]
 
 
-def sync_recent_ac(limit: int = 200, username: str | None = None) -> dict:
+def sync_recent_ac(
+    limit: int = 50, username: str | None = None, user_id: int | None = None
+) -> dict:
     """Import recent accepted submissions as solved problems. Idempotent.
 
-    username is mandatory: the caller (LLM) must have explicitly obtained the
-    user's LeetCode ID. Without it, nothing is ever fetched.
+    username is mandatory unless the account already has one on file (the
+    caller passes the stored one). user_id must be the authenticated user's id.
     """
     username = (username or "").strip()
     if not username:
@@ -121,6 +124,8 @@ def sync_recent_ac(limit: int = 200, username: str | None = None) -> dict:
             "A LeetCode username is required — ask the user for their LeetCode ID "
             "(their public profile handle) before calling sync_leetcode"
         )
+    if user_id is None:
+        raise RuntimeError("user_id is required (the authenticated user's id)")
 
     from app import service
     from app import srs
@@ -135,7 +140,7 @@ def sync_recent_ac(limit: int = 200, username: str | None = None) -> dict:
         existing = {
             p.problem_id
             for p in session.scalars(
-                select(Problem).where(Problem.user_id == service.CURRENT_USER_ID)
+                select(Problem).where(Problem.user_id == user_id)
             ).all()
         }
         for ac in recent:
@@ -153,6 +158,7 @@ def sync_recent_ac(limit: int = 200, username: str | None = None) -> dict:
 
             problem = service.add_problem(
                 session,
+                user_id=user_id,
                 problem_id=problem_id,
                 problem_link=f"https://leetcode.com/problems/{ac['slug']}/",
                 difficulty=difficulty,
@@ -166,7 +172,7 @@ def sync_recent_ac(limit: int = 200, username: str | None = None) -> dict:
 
             session.add(
                 Attempt(
-                    user_id=service.CURRENT_USER_ID,
+                    user_id=user_id,
                     problem_pk=problem.id,
                     attempt_date=ac_date,
                     solved=True,
@@ -186,10 +192,15 @@ def sync_recent_ac(limit: int = 200, username: str | None = None) -> dict:
     }
 
 
-def fetch_submissions(slug: str, limit: int = 10, with_code: bool = True) -> list[dict]:
-    if not os.getenv("LEETCODE_SESSION", "").strip():
+def fetch_submissions(
+    slug: str, limit: int = 10, with_code: bool = True, session_cookie: str | None = None
+) -> list[dict]:
+    """Fetch the caller's own submission history for one question (private data)."""
+    session_cookie = (session_cookie or "").strip()
+    if not session_cookie:
         raise RuntimeError(
-            "LeetCode submissions are private. Set LEETCODE_SESSION in .env to enable this tool."
+            "LeetCode submissions are private to their owner. Add your LEETCODE_SESSION "
+            "cookie on the connect page to enable this tool."
         )
     query = """
     query recentSubmissions($questionSlug: String!, $limit: Int!) {
@@ -204,7 +215,7 @@ def fetch_submissions(slug: str, limit: int = 10, with_code: bool = True) -> lis
       }
     }
     """
-    data = _graphql(query, {"questionSlug": slug, "limit": limit})
+    data = _graphql(query, {"questionSlug": slug, "limit": limit}, session_cookie=session_cookie)
     submission_list = data["submissionList"] or {}
     submissions = submission_list.get("submissions") or []
 

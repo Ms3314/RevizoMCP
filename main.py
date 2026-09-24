@@ -4,8 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from mcp.server.transport_security import TransportSecuritySettings
 
-import db
-from mcp_server import mcp
+from app.database import init_db
+from app.mcp_server import mcp
 
 logger = logging.getLogger("learnersmcp")
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +21,7 @@ mcp_app = mcp.streamable_http_app(
 @asynccontextmanager
 async def lifespan(app):
     try:
-        db.init_db()
+        init_db()
         logger.info("Database ready")
     except Exception as e:
         logger.warning("Database not reachable at startup: %s", e)

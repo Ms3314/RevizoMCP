@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import BigInteger, Boolean, Date, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Date, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -28,3 +28,20 @@ class Problem(Base):
 
     def __repr__(self) -> str:
         return f"<Problem {self.problem_id!r} solved={self.solved} rep={self.repetitions}>"
+
+
+class Attempt(Base):
+    __tablename__ = "attempts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False, default=1, index=True)
+    problem_pk: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("problems.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    attempt_date: Mapped[date] = mapped_column(Date, nullable=False)
+    solved: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    mistakes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    mistake_tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
+    def __repr__(self) -> str:
+        return f"<Attempt problem={self.problem_pk} date={self.attempt_date} solved={self.solved}>"

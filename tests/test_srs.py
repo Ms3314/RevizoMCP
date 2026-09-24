@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-import srs
+from app import srs
 
 
 def test_first_success_uses_first_rung():

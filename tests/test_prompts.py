@@ -86,3 +86,11 @@ def test_help_discipline_scenario():
 def test_no_delete_tool_caveat():
     # deletion is unsupported - say so plainly, never fake it with other tools
     assert "NOT SUPPORTED: there is no delete/reset tool" in SCENARIO_PLAYBOOK
+
+
+def test_starting_out_onboarding_scenario():
+    # empty tracker -> onboarding: suggest sync (scenario 10) or first add,
+    # then pivot into the ritual - never a dead end
+    assert "Starting out - the tracker is EMPTY" in SCENARIO_PLAYBOOK
+    assert "Most people start with the sync" in SCENARIO_PLAYBOOK
+    assert "scenario 12" in SCENARIO_PLAYBOOK  # scenario 1 cross-reference

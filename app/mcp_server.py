@@ -34,7 +34,7 @@ mcp = MCPServer(
         "Each signed-in user has their own private tracker."
     ),
     instructions=INSTRUCTIONS,
-    version="0.5.7",
+    version="0.5.8",
 )
 
 

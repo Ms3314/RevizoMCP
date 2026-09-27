@@ -1,5 +1,6 @@
 from datetime import date
 
+# this is a difficulty ladder apparently so here we ar defining on how much intervals do we showcase the due problems 
 INTERVAL_LADDERS: dict[str, list[int]] = {
     "easy": [1, 3, 7, 14, 30, 60, 120],
     "medium": [1, 2, 4, 8, 16, 35, 70],

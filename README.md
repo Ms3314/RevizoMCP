@@ -26,7 +26,7 @@ Revizo is an **MCP server that acts as your private DSA revision coach**. Sign i
 - **reminds you of your own mistakes** before every revisit, in your own words ("you did an off-by-one here last time — check your loop bounds")
 - **tracks your weak patterns** across everything — "you keep falling for edge case bugs: empty inputs, boundaries, overflow" — and warns you *before* new problems, not just old ones
 - **reschedules on truth**: success moves a problem further out on its ladder, failure brings it back tomorrow *carrying the mistakes forward* — that's the whole trick
-- **syncs your real LeetCode solves** and, when you're stuck, pulls your actual submission history (and code) to diagnose what keeps breaking
+- **syncs your real LeetCode solves — and your recent failed attempts** — so the coach knows exactly what you're stuck on (public API only; for code diagnosis, paste your code in chat)
 
 No separate app. No dashboard to babysit. The coach sits next to your editor where you already grind.
 
@@ -85,10 +85,10 @@ Everything else (SRS state, mistakes, weak points) is yours woven privately per 
 
 ## Roadmap
 
+- [x] **Public-API sync of failed attempts** — last ~20 submissions of any status; per-submission dedup, zero cookies
 - [ ] **Vercel-ready deploy guide** (stateless mode flag already implemented)
 - [ ] **GitHub OAuth provider** alongside Google
 - [ ] **Auto-sync on first use** (24h cooldown)
-- [ ] Per-user `LEETCODE_SESSION` collection on the connect page (private submission history + code diagnosis for everyone in the niche)
 - [ ] Rotation model ("every 7th solved problem revisited") as an alternate cadence
 
 ## Stack (for the curious)

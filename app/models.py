@@ -42,6 +42,10 @@ class Attempt(Base):
     solved: Mapped[bool] = mapped_column(Boolean, nullable=False)
     mistakes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     mistake_tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    # LeetCode's unique submission id, when this attempt IS a synced submission.
+    # NULL for manual attempts (sittings reported in chat, non-LeetCode problems).
+    # The unique constraint doubles as the sync-dedup index.
+    lc_submission_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
 
     def __repr__(self) -> str:
         return f"<Attempt problem={self.problem_pk} date={self.attempt_date} solved={self.solved}>"

@@ -62,7 +62,7 @@ def record_attempt(
     mistake_tags: list[str] | None = None,
     today: date | None = None,
 ) -> dict:
-    problem = _get(session, user_id, problem_id)
+    problem = _get(session, user_id, problem_id) # 
     if problem is None:
         raise ValueError(f"Problem '{problem_id}' not found")
 
@@ -109,7 +109,7 @@ def latest_attempt(session: Session, user_id: int, problem: Problem) -> Attempt 
     history = get_attempt_history(session, user_id, problem)
     return history[-1] if history else None
 
-
+# what does this mean ?
 def build_watch_out(session: Session, user_id: int, problem: Problem) -> str | None:
     history = get_attempt_history(session, user_id, problem)
     # most recent attempt that actually carries mistakes or tags
@@ -129,7 +129,7 @@ def build_watch_out(session: Session, user_id: int, problem: Problem) -> str | N
         f"({','.join(parts)}). Recheck your approach covers these before submitting."
     )
 
-
+# I just dont understand this code
 def get_common_mistakes(
     session: Session, user_id: int, limit: int = 5, today: date | None = None
 ) -> dict[str, dict]:

@@ -1,5 +1,4 @@
 import json
-import logging
 from datetime import date
 from typing import Literal
 
@@ -8,10 +7,9 @@ from mcp.server.mcpserver import MCPServer, Context
 from app import jwtauth
 from app import service
 from app.database import SessionLocal
-from app.leetcode_sync import fetch_submissions, sync_recent_ac
+from app.leetcode_sync import sync_recent
 from app.models import User
-
-logger = logging.getLogger("learnersmcp")
+from app.prompts import INSTRUCTIONS
 
 MISTAKE_TAG = Literal[
     "complexity_tle",
@@ -35,53 +33,8 @@ mcp = MCPServer(
         "and mistakes, surface due revisions, track weak spots, and sync LeetCode history. "
         "Each signed-in user has their own private tracker."
     ),
-    instructions=(
-        "You are a DSA revision coach backed by a spaced-repetition tracker. The signed-in "
-        "user's entire history is private to them; never reference data from other accounts.\n\n"
-        "DAILY SESSION FLOW\n"
-        "1. Start with revision_stats + get_due_problems. Present the due list as the day's "
-        "plan ('You have N revisions due; 2 of them you last failed').\n"
-        "2. Work through problems ONE AT A TIME. For each: if it was attempted before, ALWAYS "
-        "read its watch_out/mistakes aloud first and ask the user to consciously avoid those "
-        "patterns. If the user is stuck, offer get_leetcode_submissions to diagnose repeated "
-        "failures from their real submission history and code.\n"
-        "3. Immediately after EACH attempt (solve or fail), call record_attempt in the same "
-        "turn. Never batch attempts. Write mistakes in the user's own words; pick mistake_tags "
-        "only from the fixed vocabulary.\n"
-        "4. A failed attempt means the problem returns tomorrow carrying its mistakes - tell "
-        "the user explicitly ('we'll see this one again tomorrow; watch out for <tags>').\n\n"
-        "WHEN TO USE WHICH TOOL\n"
-        "- get_due_problems: the primary 'what should I revise today' entry point.\n"
-        "- get_backlog: 'give me something new' - never-solved material, oldest first. Do NOT "
-        "confuse with due revisions.\n"
-        "- add_problem: user starts a new problem. problem_id: lc-<slug> for LeetCode "
-        "problems, tracker IDs otherwise. Duplicates are rejected.\n"
-        "- record_attempt: exactly once per attempt. solved=true advances the interval "
-        "ladder; failure resets to ~1 day and returns the problem to tomorrow's due list.\n"
-        "- get_problem: drill into one problem; includes attempt history.\n"
-        "- list_problems_by_topic: topics match EXACTLY (case-insensitive): 'dp' not "
-        "'dynamic programming'. No fuzzy match.\n"
-        "- get_common_mistakes: call proactively BEFORE a new problem to warn the user "
-        "about their dominant weak patterns.\n"
-        "- Coaching style per problem: restate it briefly, give the link, topic tags and "
-        "past mistakes, let the user attempt, nudge toward complexity analysis rather than "
-        "just handing the answer.\n\n"
-        "SCHEDULING SEMANTICS (explain simply when relevant)\n"
-        "success advances the interval ladder for that difficulty "
-        "(easy 1,3,7,14,30,60,120 d; medium 1,2,4,8,16,35,70 d; hard 1,2,3,6,12,25,50 d).\n"
-        "failure resets to 1 day and attaches mistakes as watch_out for the next revision.\n\n"
-        "LEETCODE\n"
-        "- sync_leetcode imports recent ACs (public data; hard cap 50, public API exposes "
-        "~20). First sync needs the user's LeetCode ID: ask, pass explicitly, it is "
-        "remembered.\n"
-        "- When the user is stuck or failing repeatedly, offer to pull their submissions "
-        "via get_leetcode_submissions and read the code to find what keeps breaking.\n"
-        "- Proactively warn about patterns from get_common_mistakes on NEW problems "
-        "('you keep hitting edge_cases - check empty inputs and boundaries first').\n\n"
-        "TONE: encouraging coach, concise, data-grounded. Always cite the user's own "
-        "numbers and mistakes - the tracker's point is that revision is personal."
-    ),
-    version="0.3.0",
+    instructions=INSTRUCTIONS,
+    version="0.5.7",
 )
 
 
@@ -97,7 +50,7 @@ def _with_session(fn):
     finally:
         session.close()
 
-
+# this function helps us get the current user id
 def _current_user_id(ctx: Context) -> int:
     headers = dict(ctx.headers or {})
     token = headers.get("authorization", "")
@@ -113,7 +66,7 @@ def _current_user_id(ctx: Context) -> int:
         raise RuntimeError(f"Invalid or expired session - reconnect via OAuth to refresh. ({e})") from e
 
 
-def _dump_problem(session, user_id, p, with_watch_out=True) -> dict:
+def _dump_problem(session, user_id, p, with_watch_out=True) -> dict: # default with_watch_out is true
     data = {
         "problem_id": p.problem_id,
         "problem_link": p.problem_link,
@@ -128,6 +81,7 @@ def _dump_problem(session, user_id, p, with_watch_out=True) -> dict:
     }
     if with_watch_out:
         data["watch_out"] = service.build_watch_out(session, user_id, p)
+    # if there is a watch out , we are adding an extra field called that
     return data
 
 
@@ -140,11 +94,17 @@ def add_problem(
     topics: list[str],
     ctx: Context = None,
 ) -> str:
-    """Store a NEW problem the user is starting to solve.
-    Use when: the user begins a problem that is not yet in the tracker.
-    problem_id convention: 'lc-<slug>' for LeetCode problems, tracker-style IDs otherwise.
-    topics: list of topic strings (e.g. ['Array', 'Hash Table']). difficulty: easy/medium/hard.
-    Duplicate problem_ids are rejected; use get_problem to check first. Read-only-ish otherwise."""
+    """Store a NEW problem the user is starting to solve - WITHOUT any attempt outcome.
+    This never implies the user solved or failed it. Use when: the user begins a problem
+    that is not yet in the tracker. problem_id convention: 'lc-<slug>' for LeetCode
+    problems, tracker-style IDs otherwise. topics: list of topic strings (e.g.
+    ['Array', 'Hash Table']). difficulty: easy/medium/hard.
+    problem_link: use the user's link verbatim; if none was given for a LeetCode problem,
+    DERIVE it from the id ('lc-<slug>' -> 'https://leetcode.com/problems/<slug>/'); for
+    non-LeetCode material ask the user once, else save with an empty link - never fabricate.
+    Duplicate problem_ids are rejected; use get_problem to check first.
+    If the user presented an attempt on this new problem, follow with record_attempt
+    in the SAME turn (add first, then record)."""
     user_id = _current_user_id(ctx)
     try:
 
@@ -170,13 +130,15 @@ def record_attempt(
 ) -> str:
     """Record ONE attempt on a problem and RESCHEDULE it - MUTATING tool.
     Use when: the user finishes an attempt (either solve or fail), right after it happens; never batch.
+    Requires the problem to ALREADY exist - if it is new, call add_problem FIRST, then this
+    (both in one turn when the user presents an untracked problem's attempt).
     solved=true advances the revision ladder; solved=false resets to ~1 day and brings the problem back to
     tomorrow's due list carrying mistakes as watch_out. mistakes: quote the user's own words. mistake_tags:
     structured patterns chosen ONLY from this vocabulary: complexity_tle, edge_cases, off_by_one, overflow,
     misread_constraints, wrong_ds, math_error, implementation_bug, other. Repeating a past tag triggers a warning."""
     user_id = _current_user_id(ctx)
     try:
-
+        
         def record(session):
             result = service.record_attempt(
                 session, user_id, problem_id, solved, mistakes, mistake_tags
@@ -237,7 +199,7 @@ def get_backlog(ctx: Context = None) -> str:
         return "Backlog is empty. Add problems with add_problem."
     return json.dumps(problems, default=str)
 
-
+# understod : ))
 @mcp.tool()
 def get_problem(problem_id: str, ctx: Context = None) -> str:
     """Full details of ONE problem: SRS state, watch_out reminder and complete attempt history.
@@ -249,7 +211,7 @@ def get_problem(problem_id: str, ctx: Context = None) -> str:
         problem = service.get_problem(session, user_id, problem_id)
         if problem is None:
             return None
-        data = _dump_problem(session, user_id, problem)
+        data = _dump_problem(session, user_id, problem) # adds watch miskes also 
         data["attempt_history"] = [
             {
                 "date": a.attempt_date.isoformat(),
@@ -257,8 +219,8 @@ def get_problem(problem_id: str, ctx: Context = None) -> str:
                 "mistakes": a.mistakes,
                 "tags": a.mistake_tags,
             }
-            for a in service.get_attempt_history(session, user_id, problem)
-        ]
+            for a in service.get_attempt_history(session, user_id, problem) # seperate table for this
+        ] # this is getting all the previous miskes that was done on this problem
         return data
 
     data = _with_session(get)
@@ -266,22 +228,25 @@ def get_problem(problem_id: str, ctx: Context = None) -> str:
         return f"Error: Problem '{problem_id}' not found"
     return json.dumps(data)
 
-
+# : )) understod
 @mcp.tool()
 def list_problems_by_topic(topic: str, ctx: Context = None) -> str:
     """All problems whose topics include the given topic (case-insensitive EXACT match).
     Use when: the user wants to focus a topic (e.g. 'Arrays', 'DP', 'Binary Search').
     Note: 'dp' will NOT match stored 'Dynamic Programming' - match the stored wording; when in doubt
     call get_problem on a known problem to see its stored topic strings. Read-only."""
-    user_id = _current_user_id(ctx)
-
+    user_id = _current_user_id(ctx) # gets us the current user id
+    
     def get(session):
         return [
+            # watch out is such a thing that it will tell you where you made a mistake the last time
+            
+            # watch out here is a methodoly to check the last attempted thing
             _dump_problem(session, user_id, p, with_watch_out=False)
-            for p in service.list_problems_by_topic(session, user_id, topic)
+            for p in service.list_problems_by_topic(session, user_id, topic) # for each problem
         ]
 
-    problems = _with_session(get)
+    problems = _with_session(get) # we are calling the function that we are passing here as per session 
     if not problems:
         return f"No problems found for topic '{topic}'."
     return json.dumps(problems, default=str)
@@ -296,6 +261,8 @@ def revision_stats(ctx: Context = None) -> str:
     return json.dumps(_with_session(lambda s: service.revision_stats(s, user_id)))
 
 
+
+# this one might require some leetcode sessions , so maybe normally i wont be getting the leetcode session id thingy 
 @mcp.tool()
 def get_common_mistakes(limit: int = 5, ctx: Context = None) -> str:
     """Ranked mistake patterns across ALL the user's attempts - their known weak points,
@@ -308,12 +275,14 @@ def get_common_mistakes(limit: int = 5, ctx: Context = None) -> str:
 
 @mcp.tool()
 def sync_leetcode(username: str | None = None, limit: int = 50, ctx: Context = None) -> str:
-    """Import the user's recent LeetCode solved problems into their tracker (LIMIT hard-capped at 50 -
-    the public LeetCode API only exposes the ~20 most recent ACs anyway). MUTATING.
-    Use when: user asks to sync/import their LeetCode progress. Automatically reuses the stored
-    LeetCode username; if none is on file you MUST ask the user for their LeetCode ID in chat and
-    pass it here once - it is then remembered for all future syncs. Idempotent: already-known
-    problems are skipped, so re-syncing only adds new solves."""
+    """Import the user's recent LeetCode activity into their tracker (LIMIT hard-capped at 50 -
+    the public LeetCode API only exposes the ~20 most recent submissions anyway). MUTATING.
+    Imports BOTH solved problems (marked solved on their real AC date) AND recent failed
+    attempts (as unsolved backlog entries with attempt history), so the coach knows what the
+    user is stuck on. Use when: user asks to sync/import their LeetCode progress. Automatically
+    reuses the stored LeetCode username; if none is on file you MUST ask the user for their
+    LeetCode ID in chat and pass it here once - it is then remembered for all future syncs.
+    Idempotent per submission: re-syncing only adds unseen submissions, never duplicates."""
     user_id = _current_user_id(ctx)
     limit = min(limit, 50)
 
@@ -327,7 +296,7 @@ def sync_leetcode(username: str | None = None, limit: int = 50, ctx: Context = N
         )
 
     try:
-        result = sync_recent_ac(limit=limit, username=effective, user_id=user_id)
+        result = sync_recent(limit=limit, username=effective, user_id=user_id)
     except RuntimeError as e:
         return f"Error: {e}"
 
@@ -340,37 +309,3 @@ def sync_leetcode(username: str | None = None, limit: int = 50, ctx: Context = N
 
     _with_session(store)
     return json.dumps(result)
-
-
-@mcp.tool()
-def get_leetcode_submissions(
-    problem_id: str, limit: int = 10, with_code: bool = True, ctx: Context = None
-) -> str:
-    """The user's REAL LeetCode submission history for one problem: statuses (AC/WA/TLE/RE),
-    languages, runtimes, dates - plus the source code of recent submissions (with_code=true)
-    to pinpoint what keeps going wrong. Requires the user's LEETCODE_SESSION cookie on file
-    (collected on the connect page); otherwise returns an instructive error.
-    Use when: the user is stuck or failing repeatedly on a problem and diagnosis from their
-    actual attempts would help. High-value but heavier response - prefer offering it before
-    pulling unasked. Read-only."""
-    user_id = _current_user_id(ctx)
-
-    def get(session):
-        return service.get_problem(session, user_id, problem_id)
-
-    problem = _with_session(get)
-    if problem is None:
-        return f"Error: Problem '{problem_id}' not found"
-    slug = problem.problem_link.rstrip("/").split("/")[-1]
-
-    def get_cookie(session):
-        user = session.get(User, user_id)
-        return user.leetcode_session if user else ""
-
-    cookie = _with_session(get_cookie)
-    try:
-        data = fetch_submissions(slug, limit=limit, with_code=with_code, session_cookie=cookie)
-    except Exception as e:
-        logger.warning("leetcode submissions fetch failed: %s", e)
-        return f"Error fetching LeetCode submissions: {e}"
-    return json.dumps({"problem_id": problem_id, "slug": slug, "submissions": data})

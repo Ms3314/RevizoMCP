@@ -83,14 +83,6 @@ Then:
 
 Everything else (SRS state, mistakes, weak points) is yours woven privately per signed-in account — no shared bucket.
 
-## Roadmap
-
-- [x] **Public-API sync of failed attempts** — last ~20 submissions of any status; per-submission dedup, zero cookies
-- [ ] **Vercel-ready deploy guide** (stateless mode flag already implemented)
-- [ ] **GitHub OAuth provider** alongside Google
-- [ ] **Auto-sync on first use** (24h cooldown)
-- [ ] Rotation model ("every 7th solved problem revisited") as an alternate cadence
-
 ## Stack (for the curious)
 
 Python 3.12 · FastAPI · MCP (sdk Streamable HTTP) · SQLAlchemy 2 · Supabase for auth & Postgres · MCP-spec OAuth (RFC 8414 + DCR + PKCE) with JWT minting · pytest unit-tested SRS core

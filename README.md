@@ -1,7 +1,7 @@
 # <span>**Revizo**</span> <em>— your problems remember what you got wrong.</em>
 
 <p align="left">
-  <img src="revizo.png" alt="Revizo" width="620"/>
+  <img src="public/revizo.png" alt="Revizo" width="620"/>
 </p>
 
 <p align="left">

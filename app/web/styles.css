@@ -1,0 +1,5 @@
+/* Tailwind input for the Revizo web dashboard.
+   Rebuild with:  npx tailwindcss@3.4.17 -c tailwind.config.js -i app/web/styles.css -o public/app.css --minify */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

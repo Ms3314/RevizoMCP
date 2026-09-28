@@ -1,4 +1,4 @@
-# <span>**Revizo**</span> <em>— your problems remember what you got wrong.</em>
+# <img src="public/mark.svg" width="34" align="top" alt="Revizo"/> <span>**Revizo**</span> <em>— your problems remember what you got wrong.</em>
 
 <p align="left">
   <img src="public/revizo.png" alt="Revizo" width="620"/>

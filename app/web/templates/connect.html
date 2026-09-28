@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Connect — Revizo{% endblock %}
+
+{% macro copybtn(text) %}
+<button data-copy="{{ text|e }}"
+        onclick="navigator.clipboard.writeText(this.dataset.copy).then(() => { const o=this.textContent; this.textContent='Copied'; setTimeout(() => this.textContent=o, 1200) })"
+        class="absolute right-2 top-2 rounded-md border border-white/[0.08] bg-[#161618] px-2 py-1 text-[11px] text-zinc-400 opacity-0 transition group-hover:opacity-100 hover:text-zinc-100">
+  Copy
+</button>
+{% endmacro %}
+
+{% block topbar %}
+<div class="flex items-center gap-2 text-[13px] text-zinc-500">
+  <span class="font-medium text-zinc-300">MCP setup</span>
+  <span class="text-zinc-700">/</span>
+  <span>Connect your tools</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">Add Revizo to your tools</h1>
+  <p class="mt-2 text-[13.5px] leading-relaxed text-zinc-400">
+    Revizo is an MCP server. Any client that speaks MCP can connect — it signs in once with
+    {{ provider }} through your browser, and from then on your LLM is your revision coach.
+  </p>
+
+  {% if not oauth_ready %}
+  <div class="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3.5 py-3 text-[13px] text-amber-300/90">
+    OAuth isn't configured on this server yet — connections will fail until
+    <code class="font-mono text-[12px]">SUPABASE_URL</code> and
+    <code class="font-mono text-[12px]">SUPABASE_ANON_KEY</code> are set and a sign-in provider is enabled in Supabase.
+  </div>
+  {% endif %}
+
+  <!-- Server URL -->
+  <div class="mt-6 flex items-center justify-between gap-3 rounded-lg border border-white/[0.07] bg-[#0c0c0e] px-4 py-3">
+    <div class="min-w-0">
+      <div class="text-[11px] font-medium uppercase tracking-wider text-zinc-600">Server URL</div>
+      <div class="mt-0.5 truncate font-mono text-[13px] text-zinc-200">{{ mcp_url }}</div>
+    </div>
+    <div class="relative shrink-0 group">{{ copybtn(mcp_url) }}
+      <span class="inline-block cursor-pointer rounded-md border border-white/[0.08] px-2.5 py-1.5 text-[12px] text-zinc-400 transition hover:text-zinc-100">Copy URL</span>
+    </div>
+  </div>
+
+  <!-- On this page -->
+  <nav class="mt-6 rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-4">
+    <div class="text-[11px] font-medium uppercase tracking-wider text-zinc-600">On this page</div>
+    <ul class="mt-2 grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">
+      <li><a href="#cursor" class="text-zinc-500 transition hover:text-zinc-200">Cursor</a></li>
+      <li><a href="#claude-desktop" class="text-zinc-500 transition hover:text-zinc-200">Claude Desktop</a></li>
+      <li><a href="#claude-code" class="text-zinc-500 transition hover:text-zinc-200">Claude Code</a></li>
+      <li><a href="#chatgpt" class="text-zinc-500 transition hover:text-zinc-200">ChatGPT</a></li>
+      <li><a href="#other" class="text-zinc-500 transition hover:text-zinc-200">Any other MCP client</a></li>
+      <li><a href="#first-steps" class="text-zinc-500 transition hover:text-zinc-200">First steps</a></li>
+    </ul>
+  </nav>
+
+  <!-- Cursor -->
+  <section id="cursor" class="scroll-mt-20 pt-10">
+    <h2 class="text-[15px] font-semibold text-zinc-100">Cursor</h2>
+    <p class="mt-2 text-[13.5px] leading-relaxed text-zinc-400">
+      One click — no settings editing. On first connect, Cursor opens a browser sign-in ({{ provider }}).
+    </p>
+    <div class="mt-3 flex flex-wrap items-center gap-3">
+      <a href="{{ cursor_link }}" class="flex h-8 items-center rounded-md bg-white px-3 text-[13px] font-medium text-zinc-900 transition hover:bg-zinc-200">Add to Cursor</a>
+      <span class="text-[12px] text-zinc-600">or add it manually below ↓</span>
+    </div>
+    <p class="mt-5 text-[13px] text-zinc-500">Manual: <span class="text-zinc-300">Settings → MCP → Add custom MCP server</span>, paste:</p>
+    <div class="relative mt-2 group">
+      <pre class="overflow-x-auto rounded-lg border border-white/[0.07] bg-[#0c0c0e] px-4 py-3 font-mono text-[12.5px] leading-relaxed text-zinc-300">{{ manual_json }}</pre>
+      {{ copybtn(manual_json) }}
+    </div>
+  </section>
+
+  <!-- Claude Desktop -->
+  <section id="claude-desktop" class="scroll-mt-20 pt-10">
+    <h2 class="text-[15px] font-semibold text-zinc-100">Claude Desktop</h2>
+    <ol class="mt-3 space-y-2.5 text-[13.5px] leading-relaxed text-zinc-400">
+      <li class="flex gap-3"><span class="shrink-0 tabular-nums text-zinc-600">1.</span><span>Open <span class="text-zinc-200">Settings → Connectors</span> and choose <span class="text-zinc-200">Add custom connector</span>.</span></li>
+      <li class="flex gap-3"><span class="shrink-0 tabular-nums text-zinc-600">2.</span><span>Name it <span class="text-zinc-200">Revizo</span> and paste the server URL above.</span></li>
+      <li class="flex gap-3"><span class="shrink-0 tabular-nums text-zinc-600">3.</span><span>Enable it in a chat — Claude opens the {{ provider }} sign-in the first time you use it.</span></li>
+    </ol>
+  </section>
+
+  <!-- Claude Code -->
+  <section id="claude-code" class="scroll-mt-20 pt-10">
+    <h2 class="text-[15px] font-semibold text-zinc-100">Claude Code</h2>
+    <p class="mt-2 text-[13.5px] leading-relaxed text-zinc-400">Run this in your terminal, then authenticate with <code class="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[12px] text-zinc-300">/mcp</code>:</p>
+    <div class="relative mt-3 group">
+      <pre class="overflow-x-auto rounded-lg border border-white/[0.07] bg-[#0c0c0e] px-4 py-3 font-mono text-[12.5px] leading-relaxed text-zinc-300">claude mcp add --transport http revizo {{ mcp_url }}</pre>
+      {{ copybtn("claude mcp add --transport http revizo " ~ mcp_url) }}
+    </div>
+  </section>
+
+  <!-- ChatGPT -->
+  <section id="chatgpt" class="scroll-mt-20 pt-10">
+    <h2 class="text-[15px] font-semibold text-zinc-100">ChatGPT</h2>
+    <ol class="mt-3 space-y-2.5 text-[13.5px] leading-relaxed text-zinc-400">
+      <li class="flex gap-3"><span class="shrink-0 tabular-nums text-zinc-600">1.</span><span>Go to <span class="text-zinc-200">Settings → Apps &amp; Connectors</span> and create a connector (developer mode).</span></li>
+      <li class="flex gap-3"><span class="shrink-0 tabular-nums text-zinc-600">2.</span><span>Set authentication to <span class="text-zinc-200">OAuth</span> and paste the server URL above.</span></li>
+      <li class="flex gap-3"><span class="shrink-0 tabular-nums text-zinc-600">3.</span><span>Enable the connector in a chat — the {{ provider }} sign-in opens on first use.</span></li>
+    </ol>
+  </section>
+
+  <!-- Other -->
+  <section id="other" class="scroll-mt-20 pt-10">
+    <h2 class="text-[15px] font-semibold text-zinc-100">Any other MCP client</h2>
+    <p class="mt-2 text-[13.5px] leading-relaxed text-zinc-400">
+      Point the client at <code class="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[12px] text-zinc-300">{{ mcp_url }}</code>
+      using the <span class="text-zinc-200">Streamable HTTP</span> transport. The server advertises standard OAuth
+      metadata, so auth-capable clients discover the sign-in flow automatically and no token setup is needed.
+    </p>
+  </section>
+
+  <!-- First steps -->
+  <section id="first-steps" class="scroll-mt-20 pt-10">
+    <h2 class="text-[15px] font-semibold text-zinc-100">First steps once connected</h2>
+    <p class="mt-2 text-[13.5px] leading-relaxed text-zinc-400">Open your tool, sign in, and try:</p>
+    <ul class="mt-3 space-y-2 text-[13.5px] leading-relaxed text-zinc-400">
+      <li class="flex gap-2.5"><span class="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-zinc-600"></span><span><span class="text-zinc-200">“what should I revise today?”</span> — your due list, with your past mistakes attached.</span></li>
+      <li class="flex gap-2.5"><span class="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-zinc-600"></span><span><span class="text-zinc-200">“sync my leetcode, user &lt;your-id&gt;”</span> — pull in your real solves and recent failed attempts.</span></li>
+      <li class="flex gap-2.5"><span class="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-zinc-600"></span><span><span class="text-zinc-200">“record that as solved”</span> — honest record, the problem climbs its ladder.</span></li>
+    </ul>
+  </section>
+
+  <footer class="mt-12 border-t border-white/[0.06] pt-5 text-[12px] text-zinc-600">
+    Everything (SRS state, mistakes, weak points) is private per signed-in account. Details in the
+    <a href="https://github.com/" class="text-zinc-400 transition hover:text-zinc-200">README</a>.
+  </footer>
+</article>
+{% endblock %}

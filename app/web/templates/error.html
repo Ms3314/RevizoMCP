@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Revizo{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-sm pt-20 text-center">
+  <div class="mx-auto flex h-10 w-10 items-center justify-center rounded-full border border-rose-500/20 bg-rose-500/[0.06] text-rose-400">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+  </div>
+  <h1 class="mt-5 text-[15px] font-semibold text-zinc-100">{{ title }}</h1>
+  <p class="mt-2 text-[13px] leading-relaxed text-zinc-500">{{ message }}</p>
+  <a href="/login"
+     class="mt-6 inline-flex h-8 items-center rounded-md bg-white px-3.5 text-[13px] font-medium text-zinc-900 transition hover:bg-zinc-200">
+    Try again
+  </a>
+</div>
+{% endblock %}

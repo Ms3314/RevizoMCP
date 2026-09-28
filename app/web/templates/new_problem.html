@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}New problem — Revizo{% endblock %}
+
+{% block topbar %}
+<div class="flex items-center gap-2 text-[13px] text-zinc-500">
+  <a href="/app" class="transition hover:text-zinc-300">Dashboard</a>
+  <span class="text-zinc-700">/</span>
+  <span class="font-medium text-zinc-300">New problem</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-lg">
+  <h1 class="text-lg font-semibold tracking-tight text-white">Add a problem</h1>
+  <p class="mt-1 text-[13px] text-zinc-500">
+    Manually track anything the coach hasn't seen — non-LeetCode problems, mocks, puzzles.
+  </p>
+
+  {% if error %}
+  <div class="mt-5 flex items-start gap-2 rounded-lg border border-rose-500/20 bg-rose-500/[0.06] px-3.5 py-3 text-[13px] text-rose-300">
+    <svg class="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+    <span>{{ error }}</span>
+  </div>
+  {% endif %}
+
+  <form method="post" action="/app/problems/new" class="mt-6 space-y-5 rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-6">
+    <div>
+      <label for="title" class="text-[13px] font-medium text-zinc-300">Title <span class="text-zinc-600">*</span></label>
+      <input id="title" name="title" required value="{{ form.title or '' }}" placeholder="Two Sum"
+             class="mt-1.5 h-9 w-full rounded-md border border-white/[0.08] bg-transparent px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/10" />
+    </div>
+
+    <div>
+      <label for="link" class="text-[13px] font-medium text-zinc-300">Link</label>
+      <input id="link" name="link" type="url" value="{{ form.link or '' }}" placeholder="https://leetcode.com/problems/two-sum/"
+             class="mt-1.5 h-9 w-full rounded-md border border-white/[0.08] bg-transparent px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/10" />
+    </div>
+
+    <div>
+      <label for="difficulty" class="text-[13px] font-medium text-zinc-300">Difficulty</label>
+      <select id="difficulty" name="difficulty"
+              class="mt-1.5 h-9 w-full rounded-md border border-white/[0.08] bg-[#0c0c0e] px-3 text-sm text-zinc-200 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/10">
+        {% for d in ['easy', 'medium', 'hard'] %}
+        <option value="{{ d }}" {% if (form.difficulty or 'medium') == d %}selected{% endif %}>{{ d|capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label for="topics" class="text-[13px] font-medium text-zinc-300">Topics <span class="text-zinc-600">· comma separated</span></label>
+      <input id="topics" name="topics" value="{{ form.topics or '' }}" placeholder="arrays, hashing, two pointers"
+             class="mt-1.5 h-9 w-full rounded-md border border-white/[0.08] bg-transparent px-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/10" />
+    </div>
+
+    <div>
+      <label for="description" class="text-[13px] font-medium text-zinc-300">Description</label>
+      <textarea id="description" name="description" rows="4" placeholder="What the problem asks, constraints worth remembering…"
+                class="mt-1.5 w-full resize-y rounded-md border border-white/[0.08] bg-transparent px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/10">{{ form.description or '' }}</textarea>
+    </div>
+
+    <div class="flex items-center justify-end gap-2.5 border-t border-white/[0.06] pt-4">
+      <a href="/app" class="flex h-8 items-center rounded-md border border-white/[0.08] px-3 text-[13px] text-zinc-300 transition hover:bg-white/[0.04]">Cancel</a>
+      <button type="submit"
+              class="flex h-8 items-center rounded-md bg-white px-3.5 text-[13px] font-medium text-zinc-900 transition hover:bg-zinc-200">
+        Add problem
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

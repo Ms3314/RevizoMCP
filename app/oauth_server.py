@@ -101,6 +101,42 @@ def _validate_redirect(client: OAuthClient | None, redirect_uri: str) -> None:
         raise OAuthConfigError("redirect_uri not registered for this client")
 
 
+WEB_CLIENT_NAME = "revizo-web"
+
+
+def ensure_web_client(redirect_uris: list[str] | None = None) -> OAuthClient:
+    """Find or create the built-in OAuth client used by the web dashboard,
+    so browser logins ride the same /oauth flow as MCP clients.
+
+    Idempotently ensures every URI in `redirect_uris` is registered — callers
+    pass the origin the browser is actually on (localhost vs 127.0.0.1 vs the
+    deploy URL), since cookies are host-scoped and the login round-trip must
+    return to the same host that started it.
+    """
+    wanted = list(redirect_uris or [f"{APP_BASE_URL}/auth/callback"])
+    with SessionLocal() as session:
+        client = session.scalars(
+            select(OAuthClient).where(OAuthClient.client_name == WEB_CLIENT_NAME)
+        ).first()
+        if client is None:
+            client = OAuthClient(
+                client_id="web_" + secrets.token_urlsafe(16),
+                redirect_uris=wanted,
+                client_name=WEB_CLIENT_NAME,
+                created_at=date.today(),
+            )
+            session.add(client)
+        else:
+            current = list(client.redirect_uris or [])
+            missing = [u for u in wanted if u not in current]
+            if missing:
+                client.redirect_uris = current + missing
+                session.add(client)
+        session.commit()
+        session.refresh(client)
+        return client
+
+
 @router.get("/.well-known/oauth-protected-resource")
 async def protected_resource_metadata(request: Request):
     return JSONResponse(resource_metadata(request))

@@ -112,6 +112,10 @@ def latest_attempt(session: Session, user_id: int, problem: Problem) -> Attempt 
 # what does this mean ?
 def build_watch_out(session: Session, user_id: int, problem: Problem) -> str | None:
     history = get_attempt_history(session, user_id, problem)
+    return _watch_out_from_history(history)
+
+
+def _watch_out_from_history(history: list[Attempt]) -> str | None:
     # most recent attempt that actually carries mistakes or tags
     candidates = [a for a in reversed(history) if a.mistakes or a.mistake_tags]
     if not candidates:
@@ -203,6 +207,18 @@ def get_backlog(session: Session, user_id: int) -> list[Problem]:
     )
 
 
+def list_all_problems(session: Session, user_id: int) -> list[Problem]:
+    """Every tracked problem for a user — most recently touched first,
+    never-attempted problems right after those."""
+    return list(
+        session.scalars(
+            select(Problem)
+            .where(Problem.user_id == user_id)
+            .order_by(Problem.last_solved.desc().nulls_last(), Problem.id.desc())
+        ).all()
+    )
+
+
 def get_problem(session: Session, user_id: int, problem_id: str) -> Problem | None:
     return _get(session, user_id, problem_id)
 
@@ -230,6 +246,77 @@ def revision_stats(session: Session, user_id: int, today: date | None = None) ->
         "by_difficulty": {
             d: sum(1 for p in problems if p.difficulty == d) for d in ("easy", "medium", "hard")
         },
+    }
+
+
+def dashboard_data(
+    session: Session, user_id: int, today: date | None = None, due_limit: int = 10, weak_limit: int = 5
+) -> dict:
+    """Everything the web dashboard renders, in exactly two queries.
+
+    The per-page helpers (revision_stats, get_due_problems, build_watch_out,
+    get_common_mistakes, get_attempt_history) each run their own queries, so
+    rendering the dashboard through them costs 2+N round-trips against a
+    remote Postgres. Here we load the user's problems and attempts once and
+    compute all of the above in memory — same logic, same results.
+    """
+    today = today or date.today()
+
+    problems = list_all_problems(session, user_id)  # query 1
+    attempts = list(
+        session.scalars(
+            select(Attempt)
+            .where(Attempt.user_id == user_id)
+            .order_by(Attempt.attempt_date, Attempt.id)
+        ).all()
+    )  # query 2
+
+    history: dict[int, list[Attempt]] = {}
+    for attempt in attempts:
+        history.setdefault(attempt.problem_pk, []).append(attempt)
+
+    # stats (same shape as revision_stats)
+    solved = [p for p in problems if p.solved]
+    due_all = [p for p in problems if srs.is_due(p.last_solved, p.interval_days, p.solved, today)]
+    stats = {
+        "total": len(problems),
+        "solved": len(solved),
+        "backlog": len(problems) - len(solved),
+        "due_today": len(due_all),
+        "by_difficulty": {
+            d: sum(1 for p in problems if p.difficulty == d) for d in ("easy", "medium", "hard")
+        },
+    }
+
+    # due queue (same ranking as get_due_problems)
+    due_problems = sorted(due_all, key=lambda p: _priority(p, today))[:due_limit]
+    watch_outs = {p.id: _watch_out_from_history(history.get(p.id, [])) for p in due_problems}
+
+    # weak points (same shape as get_common_mistakes)
+    problems_by_pk = {p.id: p for p in problems}
+    weak_stats: dict[str, dict] = {}
+    for attempt in attempts:
+        problem = problems_by_pk.get(attempt.problem_pk)
+        for tag in attempt.mistake_tags or []:
+            entry = weak_stats.setdefault(tag, {"count": 0, "last_seen": "", "recent_problems": []})
+            entry["count"] += 1
+            entry["last_seen"] = max(entry["last_seen"], attempt.attempt_date.isoformat())
+            short = f"{problem.problem_id} ({problem.problem_description[:40]})" if problem else "?"
+            if short not in entry["recent_problems"]:
+                entry["recent_problems"].append(short)
+    weak = dict(
+        sorted(weak_stats.items(), key=lambda kv: (-kv[1]["count"], kv[0]))[:weak_limit]
+    )
+    for entry in weak.values():
+        entry["recent_problems"] = entry["recent_problems"][-3:]
+
+    return {
+        "problems": problems,
+        "stats": stats,
+        "due_problems": due_problems,
+        "watch_outs": watch_outs,
+        "weak": weak,
+        "history": {p.id: history.get(p.id, []) for p in problems},
     }
 
 

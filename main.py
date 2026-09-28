@@ -54,7 +54,13 @@ async def lifespan(app):
         yield
 
 
-app = FastAPI(lifespan=lifespan, title="Revizo API")
+app = FastAPI(
+    lifespan=lifespan,
+    title="Revizo API",
+    docs_url="/api/docs",  # Swagger moved aside — /docs is the user-facing docs section
+    redoc_url=None,
+    openapi_url="/api/openapi.json",
+)
 
 
 @app.get("/health")

@@ -1,0 +1,27 @@
+{% extends "docs_shell.html" %}
+{% from "macros.html" import copybtn, server_url_box %}
+{% block title %}Cursor — Revizo Docs{% endblock %}
+
+{% block docs %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">Cursor</h1>
+  <p class="doc-p">
+    One click — no settings editing. On first connect, Cursor opens a browser sign-in ({{ provider }}).
+  </p>
+
+  {{ server_url_box(mcp_url) }}
+
+  <h2 class="doc-h2">Add to Cursor</h2>
+  <div class="mt-3 flex flex-wrap items-center gap-3">
+    <a href="{{ cursor_link }}" class="flex h-8 items-center rounded-md bg-white px-3 text-[13px] font-medium text-zinc-900 transition hover:bg-zinc-200">Add to Cursor</a>
+    <span class="text-[12px] text-zinc-600">opens Cursor's MCP installer with Revizo pre-filled</span>
+  </div>
+
+  <h2 class="doc-h2">Manual setup</h2>
+  <p class="doc-p">Settings → MCP → Add custom MCP server, then paste:</p>
+  <div class="relative mt-2 group">
+    <pre class="overflow-x-auto rounded-lg border border-white/[0.07] bg-[#0c0c0e] px-4 py-3 font-mono text-[12.5px] leading-relaxed text-zinc-300">{{ manual_json }}</pre>
+    {{ copybtn(manual_json) }}
+  </div>
+</article>
+{% endblock %}

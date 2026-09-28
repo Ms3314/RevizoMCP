@@ -1,0 +1,30 @@
+{% extends "docs_shell.html" %}
+{% block title %}Docs — Revizo{% endblock %}
+
+{% block docs %}
+<div class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">Documentation</h1>
+  <p class="doc-p">Everything you need to wire Revizo into your tools and workflow.</p>
+
+  <div class="mt-8 grid gap-3">
+    <a href="/docs/introduction" class="group rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-5 transition hover:border-white/[0.16]">
+      <div class="text-[14px] font-medium text-zinc-100 group-hover:text-blue-400">Introduction</div>
+      <p class="mt-1.5 text-[13px] leading-relaxed text-zinc-500">
+        What Revizo is, why it exists, and how the spaced-repetition loop works.
+      </p>
+    </a>
+    <a href="/docs/features" class="group rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-5 transition hover:border-white/[0.16]">
+      <div class="text-[14px] font-medium text-zinc-100 group-hover:text-blue-400">Features</div>
+      <p class="mt-1.5 text-[13px] leading-relaxed text-zinc-500">
+        Due lists, mistake reminders, weak patterns, SRS ladders, LeetCode sync.
+      </p>
+    </a>
+    <a href="/docs/connect" class="group rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-5 transition hover:border-white/[0.16]">
+      <div class="text-[14px] font-medium text-zinc-100 group-hover:text-blue-400">Connect Revizo to your tools</div>
+      <p class="mt-1.5 text-[13px] leading-relaxed text-zinc-500">
+        Per-client guides: Cursor, Claude Desktop, Claude Code, ChatGPT, Codex, Hermes — or any MCP client.
+      </p>
+    </a>
+  </div>
+</div>
+{% endblock %}

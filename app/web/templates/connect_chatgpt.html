@@ -1,0 +1,19 @@
+{% extends "docs_shell.html" %}
+{% from "macros.html" import server_url_box %}
+{% block title %}ChatGPT — Revizo Docs{% endblock %}
+
+{% block docs %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">ChatGPT</h1>
+  <p class="doc-p">Connect Revizo as an app — the {{ provider }} sign-in opens on first use.</p>
+
+  {{ server_url_box(mcp_url) }}
+
+  <h2 class="doc-h2">Steps</h2>
+  <ol class="mt-1">
+    <li class="doc-li"><span class="shrink-0 tabular-nums text-zinc-600">1.</span><span>Go to <span class="doc-strong">Settings → Apps &amp; Connectors</span> and create a connector (developer mode).</span></li>
+    <li class="doc-li"><span class="shrink-0 tabular-nums text-zinc-600">2.</span><span>Set authentication to <span class="doc-strong">OAuth</span> and paste the server URL above.</span></li>
+    <li class="doc-li"><span class="shrink-0 tabular-nums text-zinc-600">3.</span><span>Enable the connector in a chat and start the session.</span></li>
+  </ol>
+</article>
+{% endblock %}

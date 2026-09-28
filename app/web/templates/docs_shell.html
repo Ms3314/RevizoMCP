@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% macro navlink(href, label, path) %}
+<a href="{{ href }}"
+   class="relative -ml-px block border-l py-1.5 pl-8 text-[13px] {{ 'border-blue-500/60 font-medium text-zinc-100' if path == href else 'border-transparent text-zinc-500 transition hover:text-zinc-200' }}">
+  {{ label }}
+</a>
+{% endmacro %}
+
+{% block body %}
+<header class="sticky top-0 z-20 border-b border-white/[0.07] bg-[#09090b]/85 backdrop-blur">
+  <div class="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
+    <a href="/docs" class="flex items-center gap-2.5">
+      <span class="text-zinc-100">{% include "mark" %}</span>
+      <span class="font-mono text-[13px] text-zinc-100">revizo</span>
+      <span class="text-zinc-700">/</span>
+      <span class="text-[13px] text-zinc-500">docs</span>
+    </a>
+    <div class="flex items-center gap-4 text-[13px]">
+      <a href="/connect" class="hidden text-zinc-500 transition hover:text-zinc-300 sm:block">MCP setup</a>
+      {% if user %}
+      <a href="/app" class="text-zinc-300 transition hover:text-white">Open dashboard →</a>
+      {% else %}
+      <a href="/login" class="text-zinc-300 transition hover:text-white">Sign in</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+{% set path = request.url.path.rstrip("/") %}
+
+<!-- Mobile nav strip -->
+<nav class="flex gap-5 overflow-x-auto border-b border-white/[0.06] px-4 py-3 text-[13px] lg:hidden" aria-label="Docs">
+  <a href="/docs/introduction" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/introduction' else 'text-zinc-500' }}">Intro</a>
+  <a href="/docs/features" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/features' else 'text-zinc-500' }}">Features</a>
+  <a href="/docs/connect" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/connect' else 'text-zinc-500' }}">Overview</a>
+  <a href="/docs/connect/cursor" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/connect/cursor' else 'text-zinc-500' }}">Cursor</a>
+  <a href="/docs/connect/claude" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/connect/claude' else 'text-zinc-500' }}">Claude</a>
+  <a href="/docs/connect/claude-code" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/connect/claude-code' else 'text-zinc-500' }}">Claude Code</a>
+  <a href="/docs/connect/chatgpt" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/connect/chatgpt' else 'text-zinc-500' }}">ChatGPT</a>
+  <a href="/docs/connect/codex" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/connect/codex' else 'text-zinc-500' }}">Codex</a>
+  <a href="/docs/connect/hermes" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/connect/hermes' else 'text-zinc-500' }}">Hermes</a>
+  <a href="/docs/connect/other" class="whitespace-nowrap {{ 'font-medium text-zinc-100' if path == '/docs/connect/other' else 'text-zinc-500' }}">Other</a>
+</nav>
+
+<div class="mx-auto flex w-full max-w-6xl gap-14 px-4 sm:px-6">
+  <!-- Left docs navbar (desktop) -->
+  <aside class="hidden w-52 shrink-0 py-12 lg:block">
+    <nav class="sticky top-24 text-[13px]">
+      <div class="pb-2 text-[10.5px] font-semibold uppercase tracking-[0.15em] text-zinc-600">Introduction</div>
+      <div class="ml-1 border-l border-white/[0.06]">
+        {{ navlink("/docs/introduction", "About Revizo", path) }}
+        {{ navlink("/docs/features", "Features", path) }}
+      </div>
+
+      <div class="pb-2 pt-10 text-[10.5px] font-semibold uppercase tracking-[0.15em] text-zinc-600">Connect</div>
+      <div class="ml-1 border-l border-white/[0.06]">
+        {{ navlink("/docs/connect", "Overview", path) }}
+        {{ navlink("/docs/connect/cursor", "Cursor", path) }}
+        {{ navlink("/docs/connect/claude", "Claude Desktop", path) }}
+        {{ navlink("/docs/connect/claude-code", "Claude Code", path) }}
+        {{ navlink("/docs/connect/chatgpt", "ChatGPT", path) }}
+        {{ navlink("/docs/connect/codex", "Codex", path) }}
+        {{ navlink("/docs/connect/hermes", "Hermes", path) }}
+        {{ navlink("/docs/connect/other", "Other clients", path) }}
+      </div>
+    </nav>
+  </aside>
+
+  <main class="min-w-0 flex-1 py-12">
+    {% block docs %}{% endblock %}
+
+    {% if doc is defined and (doc.prev or doc.next) %}
+    <div class="mt-14 flex items-center justify-between gap-4 border-t border-white/[0.06] pt-5 text-[13px]">
+      {% if doc.prev %}
+      <a href="{{ doc.prev.href }}" class="min-w-0 text-zinc-500 transition hover:text-zinc-200">← {{ doc.prev.title }}</a>
+      {% else %}<span></span>{% endif %}
+      {% if doc.next %}
+      <a href="{{ doc.next.href }}" class="min-w-0 truncate text-right text-zinc-500 transition hover:text-zinc-200">{{ doc.next.title }} →</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </main>
+</div>
+{% endblock %}

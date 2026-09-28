@@ -1,0 +1,10 @@
+{% extends "docs_shell.html" %}
+{% from "macros.html" import coming_soon %}
+{% block title %}{{ client_name }} — Revizo Docs{% endblock %}
+
+{% block docs %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">{{ client_name }}</h1>
+  {{ coming_soon(client_name) }}
+</article>
+{% endblock %}

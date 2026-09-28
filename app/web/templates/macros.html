@@ -1,0 +1,32 @@
+{% macro copybtn(text) %}
+<button data-copy="{{ text|e }}"
+        onclick="navigator.clipboard.writeText(this.dataset.copy).then(() => { const o=this.textContent; this.textContent='Copied'; setTimeout(() => this.textContent=o, 1200) })"
+        class="absolute right-2 top-2 rounded-md border border-white/[0.08] bg-[#161618] px-2 py-1 text-[11px] text-zinc-400 opacity-0 transition group-hover:opacity-100 hover:text-zinc-100">
+  Copy
+</button>
+{% endmacro %}
+
+{% macro server_url_box(mcp_url) %}
+<div class="relative mt-6 flex items-center justify-between gap-3 rounded-lg border border-white/[0.07] bg-[#0c0c0e] px-4 py-3">
+  <div class="min-w-0">
+    <div class="text-[11px] font-medium uppercase tracking-wider text-zinc-600">Server URL</div>
+    <div class="mt-0.5 truncate font-mono text-[13px] text-zinc-200">{{ mcp_url }}</div>
+  </div>
+  <div class="group relative shrink-0">{{ copybtn(mcp_url) }}
+    <span class="inline-block cursor-pointer rounded-md border border-white/[0.08] px-2.5 py-1.5 text-[12px] text-zinc-400 transition hover:text-zinc-100">Copy URL</span>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro coming_soon(client_name) %}
+<div class="mt-8 rounded-lg border border-white/[0.07] bg-[#0c0c0e] px-5 py-10 text-center">
+  <div class="font-mono text-[13px] text-zinc-300">{{ client_name }} guide — coming soon</div>
+  <p class="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-zinc-500">
+    We're writing this guide right now. In the meantime, {{ client_name }} follows the standard
+    MCP connector flow — the overview page has the general steps.
+  </p>
+  <a href="/docs/connect" class="mt-5 inline-flex h-8 items-center rounded-md border border-white/[0.08] px-3 text-[12.5px] text-zinc-300 transition hover:bg-white/[0.04]">
+    Connection overview
+  </a>
+</div>
+{% endmacro %}

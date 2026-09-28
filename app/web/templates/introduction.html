@@ -1,0 +1,61 @@
+{% extends "docs_shell.html" %}
+{% block title %}About Revizo — Docs{% endblock %}
+
+{% block docs %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">About Revizo</h1>
+  <p class="doc-p">
+    Revizo is a <span class="doc-strong">spaced-repetition revision coach for DSA interview prep</span>,
+    living inside your LLM. Sign in once with Google, add it to any MCP client, and your editor's LLM
+    becomes a coach that remembers every mistake you made — and resurfaces each problem exactly when
+    forgetting starts winning.
+  </p>
+
+  <h2 class="doc-h2">The problem</h2>
+  <p class="doc-p">
+    You solved Two Sum four months ago. You failed it in one spot — a subtle off-by-one in your loop
+    bounds. Since then you crammed fifty new problems, and nothing — not LeetCode history, not your
+    notes app — will bring that mistake back to you.
+  </p>
+  <p class="doc-p">
+    <span class="doc-strong">Solving isn't revision.</span> Interview prep culture is built around
+    "grind 500 problems," while burn-out-by-forgetting quietly defeats most of it. Revizo exists for
+    that gap.
+  </p>
+
+  <h2 class="doc-h2">The loop</h2>
+  <p class="doc-p">
+    No streak counters, no gamification. The loop is:
+    <span class="font-mono text-[12.5px] text-zinc-300">attempt → honest record → resurface at the right moment</span>.
+    The coach sits next to your editor where you already grind — no separate app to babysit.
+  </p>
+
+  <h2 class="doc-h2">How scheduling works</h2>
+  <p class="doc-p">One glance at the ladders (success intervals, in days):</p>
+  <div class="mt-4 overflow-hidden rounded-lg border border-white/[0.07]">
+    <table class="w-full text-[13px]">
+      <thead>
+        <tr class="border-b border-white/[0.07] bg-[#0c0c0e] text-left text-[11px] uppercase tracking-wider text-zinc-600">
+          <th class="px-4 py-2.5 font-medium">Difficulty</th>
+          <th class="px-4 py-2.5 font-medium">Success ladder (days)</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-white/[0.06] text-zinc-400">
+        <tr><td class="px-4 py-2.5 font-mono text-emerald-400/90">easy</td><td class="px-4 py-2.5 font-mono text-zinc-300">1 → 3 → 7 → 14 → 30 → 60 → 120</td></tr>
+        <tr><td class="px-4 py-2.5 font-mono text-amber-400/90">medium</td><td class="px-4 py-2.5 font-mono text-zinc-300">1 → 2 → 4 → 8 → 16 → 35 → 70</td></tr>
+        <tr><td class="px-4 py-2.5 font-mono text-rose-400/90">hard</td><td class="px-4 py-2.5 font-mono text-zinc-300">1 → 2 → 3 → 6 → 12 → 25 → 50</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="doc-p">
+    <span class="doc-strong">Solved</span> → the problem climbs one rung and comes back later.
+    <span class="doc-strong">Failed</span> → snapped back to ~1 day, mistakes recorded, and it shows up
+    tomorrow carrying them forward. That's the whole trick.
+  </p>
+
+  <h2 class="doc-h2">Privacy</h2>
+  <p class="doc-p">
+    Every problem, attempt, and mistake is scoped to your signed-in account — nothing shared, nothing public.
+  </p>
+</article>
+{% endblock %}

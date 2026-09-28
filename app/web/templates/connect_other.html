@@ -1,0 +1,20 @@
+{% extends "docs_shell.html" %}
+{% from "macros.html" import server_url_box %}
+{% block title %}Other MCP clients — Revizo Docs{% endblock %}
+
+{% block docs %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">Other MCP clients</h1>
+  <p class="doc-p">
+    Revizo works with anything that speaks MCP over <span class="doc-strong">Streamable HTTP</span>.
+  </p>
+
+  {{ server_url_box(mcp_url) }}
+
+  <p class="doc-p">
+    The server advertises standard OAuth metadata, so auth-capable clients discover the sign-in flow
+    automatically — register the URL, and the {{ provider }} sign-in happens in your browser on first
+    connect. No token setup, no config files.
+  </p>
+</article>
+{% endblock %}

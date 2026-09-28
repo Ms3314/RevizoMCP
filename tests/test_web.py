@@ -59,14 +59,52 @@ def test_landing_renders(client):
     assert "/connect" in r.text  # MCP setup link always present
 
 
-def test_connect_page_is_a_doc(client):
-    r = client.get("/connect")
+def test_docs_all_pages_render(client):
+    for slug, expected in [
+        ("introduction", "About Revizo"),
+        ("features", "Features"),
+        ("connect", "Connect Revizo"),
+        ("connect/cursor", "Add to Cursor"),
+        ("connect/claude", "Add custom connector"),
+        ("connect/claude-code", "claude mcp add"),
+        ("connect/chatgpt", "Apps &amp; Connectors"),
+        ("connect/codex", "Codex"),
+        ("connect/hermes", "Hermes"),
+        ("connect/other", "Streamable HTTP"),
+    ]:
+        r = client.get(f"/docs/{slug}")
+        assert r.status_code == 200, f"/docs/{slug} failed"
+        assert expected in r.text, f"/docs/{slug} missing {expected!r}"
+
+    # the server URL box reflects the server the browser is actually on
+    r = client.get("/docs/connect/cursor")
+    assert "http://testserver/mcp" in r.text
+
+
+def test_docs_coming_soon_pages(client):
+    for slug in ("codex", "hermes"):
+        r = client.get(f"/docs/connect/{slug}")
+        assert "coming soon" in r.text.lower()
+
+
+def test_connect_redirects_to_docs(client):
+    r = client.get("/connect", follow_redirects=False)
+    assert r.status_code == 308
+    assert r.headers["location"] == "/docs/connect"
+
+
+def test_docs_index_lists_sections(client):
+    r = client.get("/docs")
     assert r.status_code == 200
-    assert "Cursor" in r.text
-    assert "Claude Desktop" in r.text
-    assert "ChatGPT" in r.text
-    assert "/mcp" in r.text
-    assert "claude mcp add" in r.text
+    assert "/docs/introduction" in r.text
+    assert "/docs/connect" in r.text
+
+
+def test_docs_do_not_use_the_app_shell(client):
+    # docs are a separate public layout: no authenticated sidebar nav
+    r = client.get("/docs/connect")
+    assert 'href="/app"' not in r.text.split("</header>")[0]  # header has no dashboard link when signed out
+    assert "Dashboard" not in r.text.split("<main")[1].split("</main>")[0]
 
 
 def test_landing_shows_google_sign_in_when_configured(client, monkeypatch):

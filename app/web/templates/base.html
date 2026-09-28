@@ -19,67 +19,14 @@
     ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 8px; border: 2px solid #09090b; }
     ::-webkit-scrollbar-track { background: transparent; }
     html { font-feature-settings: "cv02", "cv03", "cv04"; }
+    .doc-p  { margin-top: 0.75rem; font-size: 13.5px; line-height: 1.75; color: #a1a1aa; }
+    .doc-h2 { padding-top: 2.5rem; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: #f4f4f5; }
+    .doc-li { display: flex; gap: 0.625rem; margin-top: 0.625rem; font-size: 13.5px; line-height: 1.7; color: #a1a1aa; }
+    .doc-li::before { content: ""; margin-top: 8px; height: 3px; width: 3px; flex-shrink: 0; border-radius: 9999px; background: #52525b; }
+    .doc-strong { color: #f4f4f5; font-weight: 500; }
   </style>
 </head>
 <body class="min-h-screen bg-[#09090b] font-sans text-zinc-200 antialiased">
-  {% block shell %}
-  <div class="flex min-h-screen">
-    {% block sidebar %}
-    <aside class="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-white/[0.07] bg-[#0b0b0d] md:flex">
-      <div class="flex h-14 items-center gap-2.5 border-b border-white/[0.06] px-5">
-        <span class="text-zinc-100">{% include "mark" %}</span>
-        <span class="text-[14px] font-semibold tracking-tight text-zinc-50">Revizo</span>
-      </div>
-      <nav class="flex-1 space-y-0.5 px-2 py-3 text-sm">
-        <a href="/app" class="flex items-center gap-2.5 rounded-md px-3 py-1.5 {{ 'bg-white/[0.06] text-zinc-50' if request.url.path.startswith('/app') and 'problems/new' not in request.url.path else 'text-zinc-500 transition hover:bg-white/[0.04] hover:text-zinc-200' }}">
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
-          Dashboard
-        </a>
-        <a href="/app/problems/new" class="flex items-center gap-2.5 rounded-md px-3 py-1.5 {{ 'bg-white/[0.06] text-zinc-50' if 'problems/new' in request.url.path else 'text-zinc-500 transition hover:bg-white/[0.04] hover:text-zinc-200' }}">
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          New problem
-        </a>
-        <a href="/connect" class="flex items-center gap-2.5 rounded-md px-3 py-1.5 text-zinc-500 transition hover:bg-white/[0.04] hover:text-zinc-200">
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
-          MCP setup
-        </a>
-      </nav>
-      {% if user %}
-      <div class="border-t border-white/[0.06] p-3">
-        <div class="flex items-center gap-2.5 rounded-md px-2 py-1.5">
-          <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500/20 text-[11px] font-semibold text-blue-300">{{ user.display_name[:1]|upper }}</span>
-          <span class="min-w-0 flex-1 truncate text-[13px] text-zinc-400">{{ user.email }}</span>
-          <a href="/logout" title="Sign out" class="text-zinc-600 transition hover:text-zinc-300">
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-          </a>
-        </div>
-      </div>
-      {% endif %}
-    </aside>
-    {% endblock %}
-
-    <div class="min-w-0 flex-1 md:pl-60">
-      <header class="sticky top-0 z-20 flex h-14 items-center justify-between border-b border-white/[0.07] bg-[#09090b]/85 px-4 backdrop-blur sm:px-6">
-        {% block topbar %}
-        <div class="flex items-center gap-2 md:hidden">
-          <span class="text-zinc-100">{% include "mark" %}</span>
-          <span class="text-[14px] font-semibold tracking-tight text-zinc-50">Revizo</span>
-        </div>
-        <div></div>
-        {% endblock %}
-        <div class="flex items-center gap-2">
-          {% block header_actions %}
-          {% if not user %}
-          <a href="/login" class="flex h-8 items-center rounded-md bg-white px-3 text-[13px] font-medium text-zinc-900 transition hover:bg-zinc-200">Sign in</a>
-          {% endif %}
-          {% endblock %}
-        </div>
-      </header>
-      <main class="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6">
-        {% block content %}{% endblock %}
-      </main>
-    </div>
-  </div>
-  {% endblock %}
+  {% block body %}{% endblock %}
 </body>
 </html>

@@ -32,7 +32,12 @@ from app.oauth_server import (
     ensure_web_client,
 )
 from app.srs import is_due, overdue_days
-from app.web.deps import SESSION_COOKIE, UserContext, require_user
+from app.web.deps import (
+    SESSION_COOKIE,
+    UserContext,
+    get_current_user,
+    require_user,
+)
 
 logger = logging.getLogger("learnersmcp")
 
@@ -172,29 +177,132 @@ async def logout():
     return response
 
 
-# ----------------------------------------------------------------- MCP setup
+# ----------------------------------------------------------------- docs (public)
 
 
-@router.get("/connect", response_class="text/html; charset=utf-8")
-async def connect(request: Request):
-    base = APP_BASE_URL
-    config = base64.b64encode(f'{{"type":"http","url":"{base}/mcp"}}'.encode()).decode()
-    cursor_link = (
-        f"cursor://anysphere.cursor-deeplink/mcp/install?name=Revizo&config={urllib.parse.quote(config)}"
-    )
-    manual_json = json.dumps({"mcpServers": {"revizo": {"url": f"{base}/mcp"}}}, indent=2)
+def _docs_user(request: Request):
+    return get_current_user(request)
+
+
+@router.get("/docs", response_class="text/html; charset=utf-8")
+async def docs_index(request: Request, user: UserContext | None = Depends(_docs_user)):
     return templates.TemplateResponse(
         request,
-        "connect.html",
+        "docs_index.html",
         {
-            "base": base,
-            "mcp_url": f"{base}/mcp",
-            "cursor_link": cursor_link,
-            "manual_json": manual_json,
-            "provider": os.getenv("SUPABASE_OAUTH_PROVIDER", "google"),
-            "oauth_ready": bool(SUPABASE_URL and SUPABASE_ANON_KEY),
+            "user": user,
+            "doc": {"title": "Docs", "prev": None, "next": {"href": "/docs/introduction", "title": "About Revizo"}},
         },
     )
+
+
+def _connect_vars(request: Request) -> dict:
+    # Show the URL of the server the browser is actually on (Host header +
+    # forwarded proto), not APP_BASE_URL — localhost vs 127.0.0.1 vs a deploy
+    # domain each get their own correct URL in the docs.
+    base = _issuer_from_request(request)
+    config = base64.b64encode(f'{{"type":"http","url":"{base}/mcp"}}'.encode()).decode()
+    return {
+        "mcp_url": f"{base}/mcp",
+        "cursor_link": (
+            "cursor://anysphere.cursor-deeplink/mcp/install?name=Revizo"
+            f"&config={urllib.parse.quote(config)}"
+        ),
+        "manual_json": json.dumps({"mcpServers": {"revizo": {"url": f"{base}/mcp"}}}, indent=2),
+        "provider": os.getenv("SUPABASE_OAUTH_PROVIDER", "google"),
+        "oauth_ready": bool(SUPABASE_URL and SUPABASE_ANON_KEY),
+    }
+
+
+DOCS_PAGES = {
+    "introduction": {"title": "About Revizo", "template": "introduction.html"},
+    "features": {"title": "Features", "template": "features.html"},
+    "connect": {"title": "Connect Revizo", "template": "connect_overview.html"},
+    "connect/cursor": {"title": "Cursor", "template": "connect_cursor.html"},
+    "connect/claude": {"title": "Claude Desktop", "template": "connect_claude.html"},
+    "connect/claude-code": {"title": "Claude Code", "template": "connect_claude_code.html"},
+    "connect/chatgpt": {"title": "ChatGPT", "template": "connect_chatgpt.html"},
+    "connect/codex": {"title": "Codex", "template": "connect_coming_soon.html", "client": "Codex"},
+    "connect/hermes": {"title": "Hermes", "template": "connect_coming_soon.html", "client": "Hermes"},
+    "connect/other": {"title": "Other MCP clients", "template": "connect_other.html"},
+}
+DOCS_ORDER = list(DOCS_PAGES)
+
+
+def _docs_page(request: Request, user, key: str):
+    meta = DOCS_PAGES[key]
+    idx = DOCS_ORDER.index(key)
+    prev_key = DOCS_ORDER[idx - 1] if idx > 0 else None
+    next_key = DOCS_ORDER[idx + 1] if idx + 1 < len(DOCS_ORDER) else None
+    ctx = {
+        "user": user,
+        "doc": {
+            "title": meta["title"],
+            "prev": {"href": f"/docs/{prev_key}", "title": DOCS_PAGES[prev_key]["title"]} if prev_key else None,
+            "next": {"href": f"/docs/{next_key}", "title": DOCS_PAGES[next_key]["title"]} if next_key else None,
+        },
+    }
+    if "client" in meta:
+        ctx["client_name"] = meta["client"]
+    if key.startswith("connect"):
+        ctx.update(_connect_vars(request))
+    return templates.TemplateResponse(request, meta["template"], ctx)
+
+
+@router.get("/docs/introduction")
+async def docs_introduction(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "introduction")
+
+
+@router.get("/docs/features")
+async def docs_features(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "features")
+
+
+@router.get("/docs/connect")
+async def docs_connect(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "connect")
+
+
+@router.get("/docs/connect/cursor")
+async def docs_connect_cursor(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "connect/cursor")
+
+
+@router.get("/docs/connect/claude")
+async def docs_connect_claude(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "connect/claude")
+
+
+@router.get("/docs/connect/claude-code")
+async def docs_connect_claude_code(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "connect/claude-code")
+
+
+@router.get("/docs/connect/chatgpt")
+async def docs_connect_chatgpt(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "connect/chatgpt")
+
+
+@router.get("/docs/connect/codex")
+async def docs_connect_codex(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "connect/codex")
+
+
+@router.get("/docs/connect/hermes")
+async def docs_connect_hermes(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "connect/hermes")
+
+
+@router.get("/docs/connect/other")
+async def docs_connect_other(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "connect/other")
+
+
+@router.get("/connect")
+async def connect_redirect():
+    # README references /connect; docs now live under /docs
+    return RedirectResponse("/docs/connect", status_code=308)
 
 
 # ------------------------------------------------------------------- dashboard

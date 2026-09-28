@@ -1,0 +1,64 @@
+{% extends "docs_shell.html" %}
+{% from "macros.html" import server_url_box %}
+{% block title %}Connect Revizo — Docs{% endblock %}
+
+{% block docs %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">Connect Revizo</h1>
+  <p class="doc-p">
+    Revizo is an MCP server. Any client that speaks MCP can connect — it signs in once with
+    {{ provider }} through your browser, and from then on your LLM is your revision coach.
+  </p>
+
+  {% if not oauth_ready %}
+  <div class="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3.5 py-3 text-[13px] text-amber-300/90">
+    OAuth isn't configured on this server yet — connections will fail until
+    <code class="font-mono text-[12px]">SUPABASE_URL</code> and
+    <code class="font-mono text-[12px]">SUPABASE_ANON_KEY</code> are set and a sign-in provider is enabled in Supabase.
+  </div>
+  {% endif %}
+
+  {{ server_url_box(mcp_url) }}
+
+  <h2 class="doc-h2">Pick your client</h2>
+  <div class="mt-4 grid gap-3 sm:grid-cols-2">
+    <a href="/docs/connect/cursor" class="group rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-4 transition hover:border-white/[0.16]">
+      <div class="text-[13.5px] font-medium text-zinc-100 group-hover:text-blue-400">Cursor</div>
+      <p class="mt-1 text-[12.5px] leading-relaxed text-zinc-500">One-click deeplink install.</p>
+    </a>
+    <a href="/docs/connect/claude" class="group rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-4 transition hover:border-white/[0.16]">
+      <div class="text-[13.5px] font-medium text-zinc-100 group-hover:text-blue-400">Claude Desktop</div>
+      <p class="mt-1 text-[12.5px] leading-relaxed text-zinc-500">Custom connector.</p>
+    </a>
+    <a href="/docs/connect/claude-code" class="group rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-4 transition hover:border-white/[0.16]">
+      <div class="text-[13.5px] font-medium text-zinc-100 group-hover:text-blue-400">Claude Code</div>
+      <p class="mt-1 text-[12.5px] leading-relaxed text-zinc-500">One CLI command.</p>
+    </a>
+    <a href="/docs/connect/chatgpt" class="group rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-4 transition hover:border-white/[0.16]">
+      <div class="text-[13.5px] font-medium text-zinc-100 group-hover:text-blue-400">ChatGPT</div>
+      <p class="mt-1 text-[12.5px] leading-relaxed text-zinc-500">Apps &amp; Connectors.</p>
+    </a>
+    <a href="/docs/connect/codex" class="group rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-4 transition hover:border-white/[0.16]">
+      <div class="flex items-center gap-2 text-[13.5px] font-medium text-zinc-100 group-hover:text-blue-400">Codex
+        <span class="rounded border border-white/[0.08] px-1.5 py-px text-[10px] uppercase tracking-wide text-zinc-500">soon</span>
+      </div>
+      <p class="mt-1 text-[12.5px] leading-relaxed text-zinc-500">Guide in progress.</p>
+    </a>
+    <a href="/docs/connect/hermes" class="group rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-4 transition hover:border-white/[0.16]">
+      <div class="flex items-center gap-2 text-[13.5px] font-medium text-zinc-100 group-hover:text-blue-400">Hermes
+        <span class="rounded border border-white/[0.08] px-1.5 py-px text-[10px] uppercase tracking-wide text-zinc-500">soon</span>
+      </div>
+      <p class="mt-1 text-[12.5px] leading-relaxed text-zinc-500">Guide in progress.</p>
+    </a>
+  </div>
+  <p class="doc-p">Using something else? <a href="/docs/connect/other" class="text-blue-400 transition hover:text-blue-300">Any MCP client works →</a></p>
+
+  <h2 class="doc-h2">First steps once connected</h2>
+  <p class="doc-p">Open your tool, sign in, and try:</p>
+  <ul class="mt-1">
+    <li class="doc-li"><span><span class="doc-strong font-mono text-[12.5px]">"what should I revise today?"</span> — your due list, with your past mistakes attached.</span></li>
+    <li class="doc-li"><span><span class="doc-strong font-mono text-[12.5px]">"sync my leetcode, user &lt;your-id&gt;"</span> — pull in your real solves and recent failed attempts.</span></li>
+    <li class="doc-li"><span><span class="doc-strong font-mono text-[12.5px]">"record that as solved"</span> — honest record, the problem climbs its ladder.</span></li>
+  </ul>
+</article>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "docs_shell.html" %}
+{% from "macros.html" import copybtn, server_url_box %}
+{% block title %}Claude Code — Revizo Docs{% endblock %}
+
+{% block docs %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">Claude Code</h1>
+  <p class="doc-p">One command, then authenticate in-session.</p>
+
+  {{ server_url_box(mcp_url) }}
+
+  <h2 class="doc-h2">Add the server</h2>
+  <div class="relative mt-3 group">
+    <pre class="overflow-x-auto rounded-lg border border-white/[0.07] bg-[#0c0c0e] px-4 py-3 font-mono text-[12.5px] leading-relaxed text-zinc-300">claude mcp add --transport http revizo {{ mcp_url }}</pre>
+    {{ copybtn("claude mcp add --transport http revizo " ~ mcp_url) }}
+  </div>
+  <p class="doc-p">Then run <code class="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[12px] text-zinc-300">/mcp</code> inside Claude Code and pick <span class="doc-strong">Revizo → authenticate</span>. The {{ provider }} sign-in opens in your browser.</p>
+</article>
+{% endblock %}

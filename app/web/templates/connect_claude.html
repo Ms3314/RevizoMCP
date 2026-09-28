@@ -1,0 +1,19 @@
+{% extends "docs_shell.html" %}
+{% from "macros.html" import server_url_box %}
+{% block title %}Claude Desktop — Revizo Docs{% endblock %}
+
+{% block docs %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">Claude Desktop</h1>
+  <p class="doc-p">Connect Revizo as a custom connector — Claude opens the {{ provider }} sign-in the first time you use it.</p>
+
+  {{ server_url_box(mcp_url) }}
+
+  <h2 class="doc-h2">Steps</h2>
+  <ol class="mt-1">
+    <li class="doc-li"><span class="shrink-0 tabular-nums text-zinc-600">1.</span><span>Open <span class="doc-strong">Settings → Connectors</span> and choose <span class="doc-strong">Add custom connector</span>.</span></li>
+    <li class="doc-li"><span class="shrink-0 tabular-nums text-zinc-600">2.</span><span>Name it <span class="doc-strong">Revizo</span> and paste the server URL above.</span></li>
+    <li class="doc-li"><span class="shrink-0 tabular-nums text-zinc-600">3.</span><span>Enable it in a chat — the sign-in opens on first use, then you're set.</span></li>
+  </ol>
+</article>
+{% endblock %}

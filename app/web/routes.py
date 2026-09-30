@@ -21,6 +21,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 
 from app import jwtauth, service
 from app.database import SessionLocal
@@ -557,8 +558,11 @@ async def import_all_leetcode_page(request: Request, user: UserContext = Depends
                 error="Add your LeetCode username and session cookie before importing.",
                 status_code=400,
             )
-        result = import_all_solved(
-            username=username, session_cookie=session_cookie, user_id=user.id
+        result = await run_in_threadpool(
+            import_all_solved,
+            username=username,
+            session_cookie=session_cookie,
+            user_id=user.id,
         )
     except (RuntimeError, SecretStorageError, ValueError) as e:
         return _leetcode_settings_page(

@@ -142,6 +142,8 @@ def test_leetcode_settings_save_cookie_encrypted(signed_in, client, monkeypatch)
     assert account.leetcode_username == "my-handle"
     assert account.leetcode_session.startswith("fernet:v1:")
     assert "Connected" in response.text
+    assert 'id="leetcode-import-loading"' in response.text
+    assert "Finding your solved problems" in response.text
 
 
 def test_docs_do_not_use_the_app_shell(client):

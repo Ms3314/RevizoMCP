@@ -17,10 +17,12 @@ def test_playbook_covers_both_calls_for_a_new_solved_problem():
     assert idx_add < idx_record
 
 
-def test_cookie_tool_is_gone_from_prompt():
-    # the LEETCODE_SESSION-based tool was scrapped; the prompt must not advertise it
+def test_leetcode_cookie_is_never_requested_in_chat():
+    # credentials are entered once in the signed-in dashboard, never passed in prompt/tool args
     assert "get_leetcode_submissions" not in INSTRUCTIONS
-    assert "LEETCODE_SESSION" not in INSTRUCTIONS
+    assert "NEVER ask them to paste their LEETCODE_SESSION cookie into chat" in INSTRUCTIONS
+    assert "/app/leetcode" in SCENARIO_PLAYBOOK
+    assert "import_all_leetcode" in SCENARIO_PLAYBOOK
 
 
 def test_playbook_handles_missing_problem_link():
@@ -93,4 +95,4 @@ def test_starting_out_onboarding_scenario():
     # then pivot into the ritual - never a dead end
     assert "Starting out - the tracker is EMPTY" in SCENARIO_PLAYBOOK
     assert "Most people start with the sync" in SCENARIO_PLAYBOOK
-    assert "scenario 12" in SCENARIO_PLAYBOOK  # scenario 1 cross-reference
+    assert "scenario 13" in SCENARIO_PLAYBOOK  # scenario 1 cross-reference

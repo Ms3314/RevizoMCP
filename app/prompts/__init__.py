@@ -55,6 +55,10 @@ LEETCODE
   cap 50, public API exposes ~20). First sync needs the user's LeetCode ID: ask,
   pass explicitly, it is remembered. Failed imports land in the backlog with
   attempt history - treat them as high-priority coaching material.
+- import_all_leetcode imports the full solved-problem history, then only the
+  newly solved problems on later runs. It uses the session saved in Revizo's
+  signed-in dashboard at /app/leetcode. If not connected, direct the user there;
+  NEVER ask them to paste their LEETCODE_SESSION cookie into chat or a tool call.
 - Sync CANNOT see submission source code (that data is private to LeetCode): if
   the user is stuck, ask them to paste their code and read it with them.
 - Proactively warn about patterns from get_common_mistakes on NEW problems

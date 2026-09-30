@@ -24,6 +24,10 @@ from fastapi.templating import Jinja2Templates
 
 from app import jwtauth, service
 from app.database import SessionLocal
+from app.secret_storage import (
+    SecretStorageError,
+    encrypt_leetcode_session,
+)
 from app.oauth_server import (
     APP_BASE_URL,
     SUPABASE_ANON_KEY,
@@ -31,7 +35,9 @@ from app.oauth_server import (
     _issuer_from_request,
     ensure_web_client,
 )
+from app.models import User
 from app.srs import is_due, overdue_days
+from app.web.csv_import import MAX_FILE_BYTES, parse_csv
 from app.web.deps import (
     SESSION_COOKIE,
     UserContext,
@@ -217,6 +223,8 @@ def _connect_vars(request: Request) -> dict:
 DOCS_PAGES = {
     "introduction": {"title": "About Revizo", "template": "introduction.html"},
     "features": {"title": "Features", "template": "features.html"},
+    "leetcode-import": {"title": "LeetCode import", "template": "leetcode_import.html"},
+    "importing": {"title": "Importing problems", "template": "importing.html"},
     "connect": {"title": "Connect Revizo", "template": "connect_overview.html"},
     "connect/cursor": {"title": "Cursor", "template": "connect_cursor.html"},
     "connect/claude": {"title": "Claude Desktop", "template": "connect_claude.html"},
@@ -257,6 +265,16 @@ async def docs_introduction(request: Request, user: UserContext | None = Depends
 @router.get("/docs/features")
 async def docs_features(request: Request, user: UserContext | None = Depends(_docs_user)):
     return _docs_page(request, user, "features")
+
+
+@router.get("/docs/leetcode-import")
+async def docs_leetcode_import(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "leetcode-import")
+
+
+@router.get("/docs/importing")
+async def docs_importing(request: Request, user: UserContext | None = Depends(_docs_user)):
+    return _docs_page(request, user, "importing")
 
 
 @router.get("/docs/connect")
@@ -392,6 +410,174 @@ async def dashboard(request: Request, user: UserContext = Depends(require_user))
     )
 
 
+def _leetcode_settings_page(
+    request: Request,
+    user: UserContext,
+    *,
+    connected: bool,
+    username: str = "",
+    error: str | None = None,
+    notice: str | None = None,
+    result: dict | None = None,
+    status_code: int = 200,
+):
+    response = templates.TemplateResponse(
+        request,
+        "leetcode_settings.html",
+        {
+            "user": user,
+            "connected": connected,
+            "username": username,
+            "error": error,
+            "notice": notice,
+            "result": result,
+        },
+        status_code=status_code,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@router.get("/app/leetcode", response_class="text/html; charset=utf-8")
+async def leetcode_settings(request: Request, user: UserContext = Depends(require_user)):
+    with SessionLocal() as session:
+        account = session.get(User, user.id)
+        connected = bool(account and account.leetcode_session)
+        username = (account.leetcode_username or "") if account else ""
+    return _leetcode_settings_page(
+        request,
+        user,
+        connected=connected,
+        username=username,
+        notice=request.query_params.get("saved"),
+    )
+
+
+@router.post("/app/leetcode/settings")
+async def save_leetcode_settings(request: Request, user: UserContext = Depends(require_user)):
+    from app.leetcode_sync import normalize_session_cookie
+
+    form = await request.form()
+    username = (form.get("username") or "").strip()
+    raw_cookie = (form.get("session_cookie") or "").strip()
+    if not username:
+        with SessionLocal() as session:
+            account = session.get(User, user.id)
+            connected = bool(account and account.leetcode_session)
+        return _leetcode_settings_page(
+            request, user, connected=connected, username=username,
+            error="Enter your LeetCode username.", status_code=400,
+        )
+    try:
+        encrypted_cookie = (
+            encrypt_leetcode_session(normalize_session_cookie(raw_cookie))
+            if raw_cookie
+            else None
+        )
+    except ValueError as e:
+        return _leetcode_settings_page(
+            request,
+            user,
+            connected=False,
+            username=username,
+            error=str(e),
+            status_code=400,
+        )
+    except SecretStorageError as e:
+        with SessionLocal() as session:
+            account = session.get(User, user.id)
+            connected = bool(account and account.leetcode_session)
+        return _leetcode_settings_page(
+            request,
+            user,
+            connected=connected,
+            username=username,
+            error=str(e),
+            status_code=503,
+        )
+
+    with SessionLocal() as session:
+        account = session.get(User, user.id)
+        if account is None:
+            return _leetcode_settings_page(
+                request, user, connected=False, username=username,
+                error="Your account could not be found. Please sign in again.", status_code=404,
+            )
+        account.leetcode_username = username
+        if encrypted_cookie is not None:
+            account.leetcode_session = encrypted_cookie
+        connected = bool(account.leetcode_session)
+        session.commit()
+
+    return _leetcode_settings_page(
+        request,
+        user,
+        connected=connected,
+        username=username,
+        notice="LeetCode settings saved.",
+    )
+
+
+@router.post("/app/leetcode/disconnect")
+async def disconnect_leetcode(request: Request, user: UserContext = Depends(require_user)):
+    username = ""
+    with SessionLocal() as session:
+        account = session.get(User, user.id)
+        if account is not None:
+            account.leetcode_session = ""
+            session.commit()
+            username = account.leetcode_username or ""
+    return _leetcode_settings_page(
+        request,
+        user,
+        connected=False,
+        username=username,
+        notice="LeetCode session removed.",
+    )
+
+
+@router.post("/app/leetcode/import")
+async def import_all_leetcode_page(request: Request, user: UserContext = Depends(require_user)):
+    from app.leetcode_sync import import_all_solved
+    from app.secret_storage import decrypt_leetcode_session
+
+    with SessionLocal() as session:
+        account = session.get(User, user.id)
+        username = (account.leetcode_username or "").strip() if account else ""
+        encrypted_cookie = account.leetcode_session if account else ""
+    connected = bool(encrypted_cookie)
+    try:
+        session_cookie = decrypt_leetcode_session(encrypted_cookie)
+        if not username or not session_cookie:
+            return _leetcode_settings_page(
+                request,
+                user,
+                connected=connected,
+                username=username,
+                error="Add your LeetCode username and session cookie before importing.",
+                status_code=400,
+            )
+        result = import_all_solved(
+            username=username, session_cookie=session_cookie, user_id=user.id
+        )
+    except (RuntimeError, SecretStorageError, ValueError) as e:
+        return _leetcode_settings_page(
+            request,
+            user,
+            connected=connected,
+            username=username,
+            error=str(e),
+            status_code=400,
+        )
+    return _leetcode_settings_page(
+        request,
+        user,
+        connected=True,
+        username=username,
+        result=result,
+    )
+
+
 # ----------------------------------------------------------------- add problem
 
 
@@ -441,3 +627,126 @@ async def create_problem(request: Request, user: UserContext = Depends(require_u
         return rerender(
             "Something went wrong saving the problem. Please try again.", status_code=500
         )
+
+
+# ----------------------------------------------------------------- csv import
+
+
+@router.get("/app/import", response_class="text/html; charset=utf-8")
+async def import_problems_page(request: Request, user: UserContext = Depends(require_user)):
+    return templates.TemplateResponse(request, "import_problems.html", {"result": None, "error": None})
+
+
+@router.get("/import/sample.csv")
+async def import_sample_csv():
+    """Downloadable template so users can fill in a correct CSV directly."""
+    from fastapi.responses import Response
+
+    content = (
+        "Problem,Link,Difficulty,Topics,Description\n"
+        "Two Sum,https://leetcode.com/problems/two-sum/,easy,\"arrays, hashing\",Find two numbers adding up to the target.\n"
+        "Coin Change,https://leetcode.com/problems/coin-change/,medium,dp,Fewest coins to make up an amount.\n"
+    )
+    return Response(
+        content=content,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="revizo_import_template.csv"'},
+    )
+
+
+@router.post("/app/import")
+async def import_problems(request: Request, user: UserContext = Depends(require_user)):
+    from fastapi.responses import StreamingResponse
+
+    form = await request.form()
+    upload = form.get("file")
+
+    if upload is None or not getattr(upload, "filename", ""):
+        return templates.TemplateResponse(
+            request, "import_problems.html",
+            {"result": None, "error": "Choose a .csv file to upload."}, status_code=400,
+        )
+    if not upload.filename.lower().endswith(".csv"):
+        return templates.TemplateResponse(
+            request, "import_problems.html",
+            {"result": None, "error": "Only .csv files are supported."}, status_code=400,
+        )
+
+    data = await upload.read()
+    if len(data) > MAX_FILE_BYTES:
+        return templates.TemplateResponse(
+            request, "import_problems.html",
+            {"result": None, "error": "File is too large — keep it under 1 MB."}, status_code=400,
+        )
+
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return templates.TemplateResponse(
+            request, "import_problems.html",
+            {"result": None, "error": "That file isn't valid UTF-8 text — re-save it as a plain CSV."}, status_code=400,
+        )
+
+    try:
+        parsed = parse_csv(text)
+    except ValueError as e:
+        return templates.TemplateResponse(
+            request, "import_problems.html",
+            {"result": None, "error": str(e)}, status_code=400,
+        )
+
+    if not parsed.rows:
+        return templates.TemplateResponse(
+            request, "import_problems.html",
+            {"result": None, "error": "No importable problems found — every row needs both a problem and a link."}, status_code=400,
+        )
+
+    async def event_stream():
+        imported, duplicates, failed = 0, 0, []
+        total = len(parsed.rows)
+
+        # Initial event: total rows to process
+        yield f"data: {json.dumps({'type': 'start', 'total': total, 'skipped': len(parsed.skipped)})}\n\n"
+
+        try:
+            with SessionLocal() as session:
+                for i, row in enumerate(parsed.rows):
+                    try:
+                        service.add_problem(
+                            session,
+                            user.id,
+                            problem_id=row["title"],
+                            problem_link=row["link"],
+                            difficulty=row["difficulty"],
+                            problem_description=row["description"],
+                            topics=row["topics"],
+                        )
+                        imported += 1
+                    except ValueError:
+                        duplicates += 1
+                    except Exception:
+                        failed.append(row["title"])
+
+                    # Stream progress every 10 rows or at the end
+                    if (i + 1) % 10 == 0 or i == total - 1:
+                        yield f"data: {json.dumps({'type': 'progress', 'processed': i + 1, 'total': total, 'imported': imported, 'duplicates': duplicates})}\n\n"
+
+                session.commit()
+        except Exception as e:
+            logger.warning("csv import failed: %s", e)
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Something went wrong importing.'})}\n\n"
+            return
+
+        # Final event with full summary
+        summary = {
+            'type': 'done',
+            'imported': imported,
+            'duplicates': duplicates,
+            'skipped': [{'row_number': s.row_number, 'reason': s.reason} for s in parsed.skipped],
+            'extras_ignored': parsed.extras_ignored,
+            'too_many_rows': parsed.too_many_rows,
+            'failed': failed,
+        }
+        yield f"data: {json.dumps(summary)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

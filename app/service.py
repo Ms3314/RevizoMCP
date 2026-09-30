@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app import srs
-from app.models import Attempt, Problem
+from app.models import Attempt, Problem, Strategy
 
 DIFFICULTY_RANK = {"hard": 0, "medium": 1, "easy": 2}
 
@@ -326,6 +326,93 @@ def _get(session: Session, user_id: int, problem_id: str) -> Problem | None:
             Problem.user_id == user_id, Problem.problem_id == problem_id
         )
     ).first()
+
+
+def get_strategy(session: Session, user_id: int) -> Strategy:
+    """Get user's strategy, creating defaults if not set."""
+    strategy = session.get(Strategy, user_id)
+    if strategy is None:
+        strategy = Strategy(user_id=user_id, revisions_per_session=1, backlog_per_session=2)
+        session.add(strategy)
+        session.flush()
+    return strategy
+
+
+def update_strategy(
+    session: Session, user_id: int, revisions_per_session: int | None = None, backlog_per_session: int | None = None
+) -> Strategy:
+    """Update user's strategy. Creates it if not set."""
+    strategy = get_strategy(session, user_id)
+    if revisions_per_session is not None:
+        strategy.revisions_per_session = max(0, int(revisions_per_session))
+    if backlog_per_session is not None:
+        strategy.backlog_per_session = max(0, int(backlog_per_session))
+    session.add(strategy)
+    session.flush()
+    return strategy
+
+
+def get_suggested_problems(
+    session: Session, user_id: int, today: date | None = None
+) -> dict:
+    """Fetch problems based on user's strategy: revisions (SRS) + backlog (weak/unsolved topics)."""
+    today = today or date.today()
+    strategy = get_strategy(session, user_id)
+
+    # Fetch revisions (due problems via SRS)
+    revisions = get_due_problems(session, user_id, today, limit=strategy.revisions_per_session)
+
+    # Fetch backlog problems (unsolved, prioritizing weak topics)
+    backlog = get_backlog(session, user_id)
+    
+    # Identify weak topics from mistake tags
+    weak_topics = _get_weak_topics(session, user_id)
+    
+    # Prioritize backlog problems from weak topics
+    if weak_topics and backlog:
+        weak_backlog = [
+            p for p in backlog
+            if any(wt.lower() in [t.lower() for t in (p.topics or [])] for wt in weak_topics)
+        ]
+        # Fill remaining from general backlog
+        remaining = strategy.backlog_per_session - len(weak_backlog)
+        if remaining > 0:
+            other_backlog = [p for p in backlog if p not in weak_backlog]
+            weak_backlog.extend(other_backlog[:remaining])
+        backlog_suggestions = weak_backlog[:strategy.backlog_per_session]
+    else:
+        backlog_suggestions = backlog[:strategy.backlog_per_session]
+
+    return {
+        "strategy": {
+            "revisions_per_session": strategy.revisions_per_session,
+            "backlog_per_session": strategy.backlog_per_session,
+        },
+        "revisions": revisions,
+        "backlog": backlog_suggestions,
+        "weak_topics": weak_topics,
+    }
+
+
+def _get_weak_topics(session: Session, user_id: int, threshold: int = 2) -> list[str]:
+    """Identify topics with repeated mistake patterns (>= threshold occurrences)."""
+    problems = {p.id: p for p in session.scalars(
+        select(Problem).where(Problem.user_id == user_id)
+    ).all()}
+    
+    topic_mistakes: dict[str, int] = {}
+    attempts = session.scalars(
+        select(Attempt).where(Attempt.user_id == user_id)
+    ).all()
+    
+    for attempt in attempts:
+        problem = problems.get(attempt.problem_pk)
+        if problem and attempt.mistake_tags:
+            for topic in (problem.topics or []):
+                topic_mistakes[topic.lower()] = topic_mistakes.get(topic.lower(), 0) + len(attempt.mistake_tags)
+    
+    # Return topics with >= threshold mistakes
+    return [topic for topic, count in topic_mistakes.items() if count >= threshold]
 
 
 def _priority(p: Problem, today: date) -> tuple:

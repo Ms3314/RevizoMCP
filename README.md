@@ -22,6 +22,7 @@ The idea is simple:
 
 -  Add problems from **LeetCode, CodeChef, GFG**, and other sources
 -  Sync your **LeetCode activity**
+-  Import your **full LeetCode solved history**, with incremental updates
 -  Revise problems using **AI hints**
 -  Schedule problems using **spaced repetition**
 -  Remember the **mistakes you made** on previous attempts
@@ -29,3 +30,10 @@ The idea is simple:
 -  OAuth-enabled authentication with **Google**
 -  Works directly through **MCP**
 
+## Full LeetCode import setup
+
+To enable full-history imports, configure `LEETCODE_SESSION_ENCRYPTION_KEY` with a
+Fernet key (generate one with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`).
+Keep the key stable across restarts and deployments: saved LeetCode session cookies
+are encrypted with it. Users connect once from `/app/leetcode`; see the
+LeetCode import guide in the running app for how to find and save their cookie.

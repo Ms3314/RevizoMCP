@@ -1,8 +1,10 @@
+import hashlib
 import json
 import time
 import urllib.error
 import urllib.request
 from datetime import date, datetime, timezone
+from http.cookies import SimpleCookie
 
 from dotenv import load_dotenv
 from sqlalchemy import select
@@ -23,6 +25,7 @@ FAILURE_TAG_MAP: dict[str, str] = {
 }
 
 _question_cache: dict[str, dict] | None = None
+_csrf_cache: dict[str, str] = {}
 
 
 def failure_tag_for(status_display: str) -> str | None:
@@ -42,8 +45,10 @@ def group_window_by_slug(recent: list[dict]) -> dict[str, list[dict]]:
     return by_slug
 
 
-def _graphql(query: str, variables: dict | None = None) -> dict:
-    """POST a GraphQL query to LeetCode's public endpoint (no authentication)."""
+def _graphql(
+    query: str, variables: dict | None = None, session_cookie: str | None = None
+) -> dict:
+    """POST a LeetCode GraphQL query, optionally using a signed-in session."""
     payload = json.dumps({"query": query, "variables": variables or {}}).encode()
     headers = {
         "Content-Type": "application/json",
@@ -54,15 +59,124 @@ def _graphql(query: str, variables: dict | None = None) -> dict:
             "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
         ),
     }
+    if session_cookie:
+        headers["Cookie"] = f"LEETCODE_SESSION={session_cookie}"
+        csrf = _csrf_token(session_cookie)
+        if csrf:
+            headers["Cookie"] += f"; csrftoken={csrf}"
+            headers["x-csrftoken"] = csrf
     req = urllib.request.Request(LEETCODE_GRAPHQL_URL, data=payload, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             body = json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         raise RuntimeError(f"LeetCode API returned HTTP {e.code}: {e.reason}") from e
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise RuntimeError("Could not reach LeetCode. Try the import again shortly.") from e
     if "errors" in body:
         raise RuntimeError(f"LeetCode GraphQL error: {body['errors']}")
     return body["data"]
+
+
+def _csrf_token(session_cookie: str) -> str:
+    """LeetCode's GraphQL POST expects the CSRF cookie/header pair."""
+    cache_key = hashlib.sha256(session_cookie.encode()).hexdigest()
+    if cache_key in _csrf_cache:
+        return _csrf_cache[cache_key]
+    req = urllib.request.Request(
+        "https://leetcode.com/",
+        headers={
+            "Cookie": f"LEETCODE_SESSION={session_cookie}",
+            "User-Agent": "Mozilla/5.0 (compatible; Revizo/1.0)",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            for set_cookie in resp.headers.get_all("Set-Cookie", []):
+                cookies = SimpleCookie()
+                cookies.load(set_cookie)
+                morsel = cookies.get("csrftoken")
+                if morsel:
+                    _csrf_cache[cache_key] = morsel.value
+                    return morsel.value
+    except (urllib.error.URLError, TimeoutError):
+        return ""
+    _csrf_cache[cache_key] = ""
+    return ""
+
+
+def normalize_session_cookie(value: str) -> str:
+    """Accept either the cookie value or a copied ``LEETCODE_SESSION=value``."""
+    value = (value or "").strip().strip('"').strip("'")
+    if value.lower().startswith("leetcode_session="):
+        value = value.split("=", 1)[1].strip()
+    if not value or any(char in value for char in "\r\n;"):
+        raise ValueError("Enter the LEETCODE_SESSION cookie value only.")
+    return value
+
+
+def is_encrypted_session_cookie(value: str) -> bool:
+    return bool(value and value.startswith("fernet:v1:"))
+
+
+def fetch_solved_count(username: str, session_cookie: str) -> int:
+    """Read LeetCode's per-difficulty unique solved counts for this account."""
+    query = """
+    query userQuestionProgress($userSlug: String!) {
+      userStatus { isSignedIn username }
+      userProfileUserQuestionProgressV2(userSlug: $userSlug) {
+        numAcceptedQuestions { difficulty count }
+      }
+    }
+    """
+    data = _graphql(query, {"userSlug": username}, session_cookie=session_cookie)
+    status = data.get("userStatus") or {}
+    if not status.get("isSignedIn"):
+        raise RuntimeError("LeetCode session is not valid. Replace it in LeetCode settings.")
+    authenticated_username = (status.get("username") or "").strip()
+    if authenticated_username and authenticated_username.casefold() != username.casefold():
+        raise RuntimeError(
+            f"The saved LeetCode session belongs to '{authenticated_username}', not '{username}'. "
+            "Update the username in LeetCode settings."
+        )
+    progress = data.get("userProfileUserQuestionProgressV2") or {}
+    counts = progress.get("numAcceptedQuestions") or []
+    all_count = next(
+        (int(item.get("count") or 0) for item in counts if (item.get("difficulty") or "").casefold() == "all"),
+        None,
+    )
+    return all_count if all_count is not None else sum(
+        int(item.get("count") or 0)
+        for item in counts
+        if (item.get("difficulty") or "").casefold() != "all"
+    )
+
+
+def fetch_solved_questions(session_cookie: str) -> dict[str, dict]:
+    """Read the signed-in user's complete solved-slug set from LeetCode."""
+    query = """
+    query allQuestions {
+      allQuestions {
+        title
+        titleSlug
+        status
+        difficulty
+        topicTags { name }
+      }
+    }
+    """
+    data = _graphql(query, session_cookie=session_cookie)
+    solved: dict[str, dict] = {}
+    for item in data.get("allQuestions") or []:
+        slug = item.get("titleSlug")
+        if not slug or (item.get("status") or "").casefold() not in {"ac", "accepted"}:
+            continue
+        solved[slug] = {
+            "title": item.get("title") or slug,
+            "difficulty": (item.get("difficulty") or "Medium").lower(),
+            "topics": [tag["name"] for tag in item.get("topicTags") or [] if tag.get("name")],
+        }
+    return solved
 
 
 def _load_question_catalog() -> dict[str, dict]:
@@ -377,4 +491,154 @@ def sync_recent(
         "added": added,
         "failed_imported": failed_imported,
         "skipped_existing": skipped,
+    }
+
+
+def import_all_solved(
+    *, username: str, session_cookie: str, user_id: int
+) -> dict:
+    """Import all solved LeetCode problems, then only newly solved problems later.
+
+    The profile's unique solved count avoids another question-list request when
+    nothing has changed. When it increases, an authenticated `allQuestions`
+    query returns solved slugs; the per-user import table determines which are
+    genuinely new. Tracked problems and sync state are committed atomically.
+    """
+    username = (username or "").strip()
+    session_cookie = normalize_session_cookie(session_cookie)
+    if not username:
+        raise RuntimeError("A LeetCode username is required. Add it in LeetCode settings.")
+    if user_id is None:
+        raise RuntimeError("user_id is required (the authenticated user's id)")
+
+    from app import service, srs
+    from app.database import SessionLocal
+    from app.models import (
+        LeetCodeProblem,
+        LeetCodeSyncState,
+        Problem,
+        User,
+    )
+
+    solved_count = fetch_solved_count(username, session_cookie)
+    with SessionLocal() as session:
+        state = session.get(LeetCodeSyncState, user_id)
+        previous_count = state.solved_count if state else None
+        previous_username = state.username if state else ""
+        known_slugs = set(
+            session.scalars(
+                select(LeetCodeProblem.slug).where(LeetCodeProblem.user_id == user_id)
+            ).all()
+        )
+
+    full_scan = (
+        previous_count is None
+        or previous_username.casefold() != username.casefold()
+        or solved_count < previous_count
+    )
+    target = solved_count if full_scan else solved_count - previous_count
+    all_solved = fetch_solved_questions(session_cookie) if target > 0 or full_scan else {}
+    if full_scan and len(all_solved) != solved_count:
+        raise RuntimeError(
+            "LeetCode's solved-problem list does not match its profile count. "
+            "No import checkpoint was changed; try again later."
+        )
+    new_problems = {
+        slug: question
+        for slug, question in all_solved.items()
+        if slug not in known_slugs
+    }
+    if not full_scan and len(new_problems) != target:
+        raise RuntimeError(
+            "LeetCode's solved-problem list does not match the new-solve count. "
+            "No import checkpoint was changed; try again later."
+        )
+
+    now = datetime.now(timezone.utc)
+    added = already_tracked = registered = 0
+    with SessionLocal() as session:
+        user = session.get(User, user_id)
+        if user is None:
+            raise RuntimeError("Revizo account was not found. Please sign in again.")
+
+        imported = {
+            item.slug: item
+            for item in session.scalars(
+                select(LeetCodeProblem).where(LeetCodeProblem.user_id == user_id)
+            ).all()
+        }
+        existing_problems = {
+            problem.problem_id: problem
+            for problem in session.scalars(
+                select(Problem).where(Problem.user_id == user_id)
+            ).all()
+        }
+        for slug, entry in new_problems.items():
+            if slug in imported:
+                continue
+            problem_id = f"lc-{slug}"
+            difficulty = entry.get("difficulty", "medium")
+            title = entry.get("title") or slug
+            topics = entry.get("topics", [])
+            problem = existing_problems.get(problem_id)
+            if problem is None:
+                problem = service.add_problem(
+                    session,
+                    user_id=user_id,
+                    problem_id=problem_id,
+                    problem_link=f"https://leetcode.com/problems/{slug}/",
+                    difficulty=difficulty,
+                    problem_description=title,
+                    topics=topics,
+                )
+                problem.solved = True
+                # The authenticated solved-problem list has no per-problem AC
+                # date. Start the revision schedule from the import date.
+                imported_date = now.date()
+                problem.last_solved = imported_date
+                problem.repetitions = 1
+                problem.interval_days = srs.ladder_for(problem.difficulty)[0]
+                added += 1
+            else:
+                already_tracked += 1
+                if not problem.solved:
+                    problem.solved = True
+                    imported_date = now.date()
+                    problem.last_solved = imported_date
+                    problem.interval_days = srs.next_interval(
+                        problem.difficulty, problem.repetitions, True
+                    )
+                    problem.repetitions += 1
+            session.add(
+                LeetCodeProblem(
+                    user_id=user_id,
+                    slug=slug,
+                    title=title,
+                    difficulty=difficulty,
+                    topics=topics,
+                    problem_pk=problem.id,
+                    imported_at=now,
+                )
+            )
+            registered += 1
+
+        state = session.get(LeetCodeSyncState, user_id)
+        if state is None:
+            state = LeetCodeSyncState(user_id=user_id)
+            session.add(state)
+        state.username = username
+        state.solved_count = solved_count
+        state.last_synced_at = now
+        user.leetcode_username = username
+        user.last_synced_at = now.date()
+        session.commit()
+
+    return {
+        "username": username,
+        "total_solved": solved_count,
+        "newly_solved": len(new_problems),
+        "added_to_tracker": added,
+        "already_tracked": already_tracked,
+        "import_records_added": registered,
+        "mode": "full" if full_scan else "incremental",
     }

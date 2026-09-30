@@ -3,7 +3,10 @@
 from app.leetcode_sync import (
     ACCEPTED,
     failure_tag_for,
+    fetch_solved_count,
+    fetch_solved_questions,
     group_window_by_slug,
+    normalize_session_cookie,
 )
 
 
@@ -56,3 +59,69 @@ def test_failure_tag_mapping():
     assert failure_tag_for("Runtime Error") == "implementation_bug"
     assert failure_tag_for("Wrong Answer") is None  # never fabricate a diagnosis
     assert failure_tag_for(ACCEPTED) is None
+
+
+def test_normalize_session_cookie_accepts_cookie_header_value():
+    assert normalize_session_cookie('"LEETCODE_SESSION=abc123"') == "abc123"
+
+
+def test_normalize_session_cookie_rejects_other_cookie_fields():
+    import pytest
+
+    with pytest.raises(ValueError):
+        normalize_session_cookie("abc123; csrftoken=other")
+
+
+def test_fetch_solved_count_requires_matching_signed_in_user(monkeypatch):
+    import pytest
+    import app.leetcode_sync as sync
+
+    monkeypatch.setattr(
+        sync,
+        "_graphql",
+        lambda *args, **kwargs: {
+            "userStatus": {"isSignedIn": True, "username": "my-handle"},
+            "userProfileUserQuestionProgressV2": {
+                "numAcceptedQuestions": [
+                    {"difficulty": "All", "count": 22},
+                    {"difficulty": "Easy", "count": 12},
+                    {"difficulty": "Medium", "count": 8},
+                    {"difficulty": "Hard", "count": 2},
+                ]
+            },
+        },
+    )
+    assert fetch_solved_count("my-handle", "cookie") == 22
+    with pytest.raises(RuntimeError, match="belongs to"):
+        fetch_solved_count("another-handle", "cookie")
+
+
+def test_full_solved_question_query_returns_only_accepted_slugs(monkeypatch):
+    import app.leetcode_sync as sync
+
+    monkeypatch.setattr(
+        sync,
+        "_graphql",
+        lambda *args, **kwargs: {
+            "allQuestions": [
+                {
+                    "title": "Two Sum",
+                    "titleSlug": "two-sum",
+                    "status": "ac",
+                    "difficulty": "Easy",
+                    "topicTags": [{"name": "Array"}],
+                },
+                {
+                    "title": "3Sum",
+                    "titleSlug": "3sum",
+                    "status": None,
+                    "difficulty": "Medium",
+                    "topicTags": [],
+                },
+            ]
+        },
+    )
+    result = fetch_solved_questions("cookie")
+    assert list(result) == ["two-sum"]
+    assert result["two-sum"]["difficulty"] == "easy"
+    assert result["two-sum"]["topics"] == ["Array"]

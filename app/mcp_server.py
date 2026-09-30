@@ -10,6 +10,7 @@ from app.database import SessionLocal
 from app.leetcode_sync import sync_recent
 from app.models import User
 from app.prompts import INSTRUCTIONS
+from app.secret_storage import SecretStorageError, decrypt_leetcode_session
 
 MISTAKE_TAG = Literal[
     "complexity_tle",
@@ -309,3 +310,96 @@ def sync_leetcode(username: str | None = None, limit: int = 50, ctx: Context = N
 
     _with_session(store)
     return json.dumps(result)
+
+
+@mcp.tool()
+def import_all_leetcode(ctx: Context = None) -> str:
+    """Import all solved LeetCode problems, then only newly solved problems on later runs.
+
+    Requires a LeetCode username and session cookie saved once in the signed-in
+    Revizo dashboard at /app/leetcode. Never ask the user to paste the cookie in
+    chat or pass it as a tool argument. Use when the user requests their full
+    LeetCode solved-problem history; the saved session is reused automatically.
+    MUTATING and idempotent by user + LeetCode problem slug.
+    """
+    from app.leetcode_sync import import_all_solved
+
+    user_id = _current_user_id(ctx)
+    user = _with_session(lambda session: session.get(User, user_id))
+    username = (user.leetcode_username or "").strip() if user else ""
+    encrypted_cookie = user.leetcode_session if user else ""
+    if not username or not encrypted_cookie:
+        return (
+            "Connect LeetCode once from your signed-in Revizo dashboard at /app/leetcode, "
+            "then retry. Do not paste the session cookie into chat."
+        )
+    try:
+        session_cookie = decrypt_leetcode_session(encrypted_cookie)
+        result = import_all_solved(
+            username=username, session_cookie=session_cookie, user_id=user_id
+        )
+    except (RuntimeError, ValueError, SecretStorageError) as e:
+        return f"LeetCode import failed: {e}"
+    return json.dumps(result)
+
+
+@mcp.tool()
+def get_suggested_problems(ctx: Context = None) -> str:
+    """Curated problem list based on user's strategy: N revisions (SRS-based, due today) + M backlog
+    problems (from weak topics or unsolved). Use when: user asks 'what should I solve today?' or
+    wants a targeted session plan. Read-only.
+
+    The strategy is set via update_strategy (default: 1 revision + 2 backlog). Revisions come from
+    the spaced-repetition ladder (problems due today). Backlog problems are prioritized from topics
+    where the user has repeated mistakes (weak spots), then from general unsolved material.
+
+    Returns: strategy settings, revision list, backlog list, and identified weak topics."""
+    user_id = _current_user_id(ctx)
+
+    def get(session):
+        result = service.get_suggested_problems(session, user_id, date.today())
+        return {
+            "strategy": result["strategy"],
+            "revisions": [
+                _dump_problem(session, user_id, p) for p in result["revisions"]
+            ],
+            "backlog": [
+                _dump_problem(session, user_id, p, with_watch_out=False)
+                for p in result["backlog"]
+            ],
+            "weak_topics": result["weak_topics"],
+        }
+
+    data = _with_session(get)
+    if not data["revisions"] and not data["backlog"]:
+        return "Nothing to suggest. Add problems with add_problem or sync LeetCode."
+    return json.dumps(data, default=str)
+
+
+@mcp.tool()
+def update_strategy(
+    revisions_per_session: int | None = None,
+    backlog_per_session: int | None = None,
+    ctx: Context = None,
+) -> str:
+    """Set how many revisions (SRS-based) and backlog problems (weak/unsolved topics) to suggest
+    per session. MUTATING. Use when: user wants to change their daily session plan (e.g., 'I want
+    2 revisions and 3 new problems today').
+
+    revisions_per_session: how many due problems to suggest (default 1). backlog_per_session: how
+    many unsolved problems to suggest, prioritizing weak topics (default 2). Both must be >= 0.
+
+    Returns the updated strategy."""
+    user_id = _current_user_id(ctx)
+
+    def update(session):
+        strategy = service.update_strategy(
+            session, user_id, revisions_per_session, backlog_per_session
+        )
+        return {
+            "revisions_per_session": strategy.revisions_per_session,
+            "backlog_per_session": strategy.backlog_per_session,
+        }
+
+    data = _with_session(update)
+    return f"Strategy updated: {json.dumps(data)}"

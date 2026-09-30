@@ -18,6 +18,10 @@
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         New problem
       </a>
+      <a href="/app/leetcode" class="flex items-center gap-2.5 rounded-md px-3 py-2 {{ 'bg-white/[0.06] text-zinc-50' if request.url.path.startswith('/app/leetcode') else 'text-zinc-500 transition hover:bg-white/[0.04] hover:text-zinc-200' }}">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M17 8l-5-5-5 5M5 16l7 5 7-5"/></svg>
+        LeetCode import
+      </a>
       <a href="/docs" class="flex items-center gap-2.5 rounded-md px-3 py-2 {{ 'bg-white/[0.06] text-zinc-50' if request.url.path.startswith('/docs') else 'text-zinc-500 transition hover:bg-white/[0.04] hover:text-zinc-200' }}">
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
         Docs

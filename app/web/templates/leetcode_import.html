@@ -1,0 +1,39 @@
+{% extends "docs_shell.html" %}
+{% block title %}LeetCode full-history import — Revizo Docs{% endblock %}
+
+{% block docs %}
+<article class="mx-auto max-w-2xl">
+  <h1 class="text-lg font-semibold tracking-tight text-white">Import your full LeetCode history</h1>
+  <p class="doc-p">
+    The regular LeetCode sync uses public profile data and imports recent activity. To import all solved
+    problems, connect your LeetCode account once with its <code class="font-mono text-[12px] text-zinc-300">LEETCODE_SESSION</code> cookie.
+  </p>
+
+  <h2 class="doc-h2">1. Find your session cookie</h2>
+  <ol class="mt-2 space-y-2 text-[13.5px] leading-relaxed text-zinc-400">
+    <li>1. Sign in to <a href="https://leetcode.com" target="_blank" rel="noopener" class="text-blue-400">leetcode.com</a> in your browser.</li>
+    <li>2. Open Developer Tools (usually <span class="font-mono text-zinc-300">F12</span> or right-click → <span class="text-zinc-300">Inspect</span>).</li>
+    <li>3. Open the <span class="text-zinc-300">Application</span> tab in Chrome/Edge (or <span class="text-zinc-300">Storage</span> in Firefox), then open <span class="text-zinc-300">Cookies → https://leetcode.com</span>.</li>
+    <li>4. Find <span class="font-mono text-zinc-300">LEETCODE_SESSION</span> and copy its <span class="text-zinc-300">Value</span>. Copy only the value, not the cookie name or other cookie fields.</li>
+  </ol>
+  <div class="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-4 py-3 text-[12.5px] leading-relaxed text-amber-200/80">
+    This cookie is a private sign-in credential. Never paste it into an AI chat, share it with anyone, or include it in a screenshot.
+  </div>
+
+  <h2 class="doc-h2">2. Save it in Revizo</h2>
+  <ol class="mt-2 space-y-2 text-[13.5px] leading-relaxed text-zinc-400">
+    <li>1. Sign in to Revizo and open <a href="/app/leetcode" class="text-blue-400">LeetCode import settings</a>.</li>
+    <li>2. Enter your LeetCode username and paste the cookie value into the session-cookie field.</li>
+    <li>3. Select <span class="text-zinc-300">Save connection</span>, then choose <span class="text-zinc-300">Import all problems</span>.</li>
+  </ol>
+  <p class="doc-p">
+    Revizo encrypts the cookie before saving it. You add it once; it is reused for future imports and is not sent through your MCP chat. If LeetCode expires the cookie, replace it in the same settings page. You can remove it there at any time.
+  </p>
+  <p class="doc-p">
+    The first import checks your solved-problem list. Later imports compare your solved count and only add slugs that are new since the last import. Existing tracker history is preserved.
+  </p>
+  <p class="doc-p">
+    LeetCode's solved-problem list does not include each problem's original solve date or older attempt history. Imported problems start their revision schedule on the import date; use the regular recent sync to bring in recent attempts.
+  </p>
+</article>
+{% endblock %}

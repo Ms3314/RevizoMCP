@@ -1,0 +1,83 @@
+{% extends "shell.html" %}
+{% block title %}LeetCode import — Revizo{% endblock %}
+
+{% block topbar %}
+<div class="flex items-center gap-2 text-[13px] text-zinc-500">
+  <a href="/app" class="transition hover:text-zinc-300">Dashboard</a>
+  <span class="text-zinc-700">/</span>
+  <span class="font-medium text-zinc-300">LeetCode import</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h1 class="text-lg font-semibold tracking-tight text-white">Import all solved problems</h1>
+      <p class="mt-1 max-w-xl text-[13px] leading-relaxed text-zinc-500">
+        Connect your LeetCode account once. Revizo remembers the connection and future imports only
+        look for newly solved problems.
+      </p>
+    </div>
+    <span class="rounded-full border px-2.5 py-1 text-[11px] {{ 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-400' if connected else 'border-white/[0.08] text-zinc-500' }}">
+      {{ 'Connected' if connected else 'Not connected' }}
+    </span>
+  </div>
+
+  {% if error %}
+  <div class="mt-5 rounded-lg border border-rose-500/20 bg-rose-500/[0.06] px-4 py-3 text-[13px] leading-relaxed text-rose-300">{{ error }}</div>
+  {% endif %}
+  {% if notice %}
+  <div class="mt-5 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] px-4 py-3 text-[13px] text-emerald-300">{{ notice }}</div>
+  {% endif %}
+
+  {% if result %}
+  <section class="mt-5 rounded-lg border border-blue-500/20 bg-blue-500/[0.04] p-5">
+    <h2 class="text-[13px] font-medium text-zinc-200">Import complete</h2>
+    <p class="mt-2 text-[13px] leading-relaxed text-zinc-400">
+      {{ result.newly_solved }} newly solved problem{{ '' if result.newly_solved == 1 else 's' }} found.
+      {{ result.added_to_tracker }} added to your revision tracker{% if result.already_tracked %}; {{ result.already_tracked }} already tracked{% endif %}.
+    </p>
+    <p class="mt-1 text-[12px] text-zinc-600">{{ result.total_solved }} solved on LeetCode · {{ result.mode }} sync</p>
+    <a href="/app" class="mt-4 inline-flex h-8 items-center rounded-md bg-white px-3 text-[13px] font-medium text-zinc-900 transition hover:bg-zinc-200">View dashboard</a>
+  </section>
+  {% endif %}
+
+  <form method="post" action="/app/leetcode/settings" class="mt-6 space-y-5 rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-5 sm:p-6">
+    <div>
+      <label for="username" class="text-[13px] font-medium text-zinc-300">LeetCode username</label>
+      <input id="username" name="username" value="{{ username }}" autocomplete="username" spellcheck="false" required
+             class="mt-1.5 h-10 w-full rounded-md border border-white/[0.08] bg-transparent px-3 text-[13px] text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/10" placeholder="your LeetCode handle" />
+    </div>
+    <div>
+      <label for="session_cookie" class="text-[13px] font-medium text-zinc-300">LeetCode session cookie</label>
+      <input id="session_cookie" name="session_cookie" type="password" autocomplete="new-password" autocapitalize="off" spellcheck="false"
+             class="mt-1.5 h-10 w-full rounded-md border border-white/[0.08] bg-transparent px-3 font-mono text-[12px] text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/10"
+             placeholder="{{ 'Saved — leave blank to keep it' if connected else 'Paste the LEETCODE_SESSION value' }}" />
+      <p class="mt-2 text-[12px] leading-relaxed text-zinc-600">
+        {% if connected %}Your saved cookie is never shown. Leave this blank to keep it, or enter a replacement.{% else %}This is needed only for the full-history import. The cookie is encrypted before storage and is never sent to your AI chat.{% endif %}
+        <a href="/docs/leetcode-import" class="text-blue-400 transition hover:text-blue-300">How to find it</a>.
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-4">
+      <a href="/app" class="text-[13px] text-zinc-500 transition hover:text-zinc-300">Back to dashboard</a>
+      <button type="submit" class="h-9 rounded-md bg-white px-4 text-[13px] font-medium text-zinc-900 transition hover:bg-zinc-200">Save connection</button>
+    </div>
+  </form>
+
+  {% if connected %}
+  <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/[0.07] bg-[#0c0c0e] p-5">
+    <div>
+      <h2 class="text-[13px] font-medium text-zinc-200">Sync your solved history</h2>
+      <p class="mt-1 text-[12px] text-zinc-600">First import may take a little while. Later imports only fetch the difference.</p>
+    </div>
+    <form method="post" action="/app/leetcode/import">
+      <button type="submit" class="h-9 rounded-md bg-blue-500 px-4 text-[13px] font-medium text-white transition hover:bg-blue-400">Import all problems</button>
+    </form>
+  </div>
+  <form method="post" action="/app/leetcode/disconnect" class="mt-4 text-right">
+    <button type="submit" class="text-[12px] text-zinc-600 underline decoration-zinc-800 underline-offset-4 transition hover:text-rose-400">Remove saved LeetCode session</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

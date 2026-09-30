@@ -63,6 +63,7 @@ def test_docs_all_pages_render(client):
     for slug, expected in [
         ("introduction", "About Revizo"),
         ("features", "Features"),
+        ("leetcode-import", "Import your full LeetCode history"),
         ("connect", "Connect Revizo"),
         ("connect/cursor", "Add to Cursor"),
         ("connect/claude", "Add custom connector"),
@@ -98,6 +99,49 @@ def test_docs_index_lists_sections(client):
     assert r.status_code == 200
     assert "/docs/introduction" in r.text
     assert "/docs/connect" in r.text
+    assert "/docs/leetcode-import" in r.text
+
+
+def test_leetcode_settings_save_cookie_encrypted(signed_in, client, monkeypatch):
+    from cryptography.fernet import Fernet
+
+    from app import models
+    import app.web.routes as routes
+
+    cookie = "sensitive-leetcode-session-value"
+    account = models.User(
+        id=1, supabase_sub="sub", email="dev@example.com", display_name="dev"
+    )
+    monkeypatch.setenv(
+        "LEETCODE_SESSION_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
+
+    class FakeSession:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def get(self, model, user_id):
+            assert model is models.User
+            assert user_id == 1
+            return account
+
+        def commit(self):
+            pass
+
+    monkeypatch.setattr(routes, "SessionLocal", FakeSession)
+    response = client.post(
+        "/app/leetcode/settings",
+        data={"username": "my-handle", "session_cookie": cookie},
+    )
+
+    assert response.status_code == 200
+    assert cookie not in response.text
+    assert account.leetcode_username == "my-handle"
+    assert account.leetcode_session.startswith("fernet:v1:")
+    assert "Connected" in response.text
 
 
 def test_docs_do_not_use_the_app_shell(client):
@@ -218,10 +262,10 @@ def test_dashboard_data_matches_per_page_helpers():
 
     from app import srs
     from app.database import Base
-    from app.models import Attempt, OAuthClient, Problem, User
+    from app.models import Attempt, LeetCodeProblem, OAuthClient, Problem, User
 
     # JSONB is postgres-only; swap to portable JSON before any DDL is emitted
-    for model in (Problem, Attempt, OAuthClient):
+    for model in (Problem, Attempt, LeetCodeProblem, OAuthClient):
         for col in model.__table__.columns:
             if isinstance(col.type, postgresql.JSONB):
                 col.type = JSON()

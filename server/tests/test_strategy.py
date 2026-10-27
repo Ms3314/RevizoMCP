@@ -209,3 +209,59 @@ def test_get_suggested_problems_respects_limits():
         assert len(result["revisions"]) == 1
         assert len(result["backlog"]) == 2
         assert result["weak_topics"] == ["arrays"]
+
+
+def _real_problem(pk, problem_id, *, solved, last_solved, interval_days=1, topics=None):
+    return Problem(
+        id=pk, user_id=1, problem_id=problem_id, problem_link="", difficulty="medium",
+        problem_description="", topics=topics or [], solved=solved, last_solved=last_solved,
+        mistakes="", interval_days=interval_days, repetitions=0,
+    )
+
+
+def _suggest_from(problems, revisions, backlog, monkeypatch):
+    """Run get_suggested_problems over real Problem rows with the real due logic."""
+    session = Mock()
+    session.get.return_value = Strategy(
+        user_id=1, revisions_per_session=revisions, backlog_per_session=backlog
+    )
+    session.scalars.return_value.all.return_value = problems
+    monkeypatch.setattr(service, "get_backlog", lambda s, u: [p for p in problems if not p.solved])
+    monkeypatch.setattr(service, "_get_weak_topics", lambda s, u, threshold=2: [])
+    return service.get_suggested_problems(session, user_id=1)
+
+
+def test_suggestions_never_list_a_problem_twice(monkeypatch):
+    """A failed problem is both due and unsolved: it is a revision, not also backlog."""
+    today = date.today()
+    failed = _real_problem(1, "failed", solved=False, last_solved=today - timedelta(days=2))
+    fresh = _real_problem(2, "fresh", solved=False, last_solved=None)
+
+    result = _suggest_from([failed, fresh], revisions=2, backlog=2, monkeypatch=monkeypatch)
+
+    revision_ids = [p.problem_id for p in result["revisions"]]
+    backlog_ids = [p.problem_id for p in result["backlog"]]
+    assert revision_ids == ["failed"]
+    assert backlog_ids == ["fresh"]
+    assert not set(revision_ids) & set(backlog_ids)
+
+
+def test_never_attempted_problems_are_not_revisions(monkeypatch):
+    """Untouched backlog doesn't fill revision slots, even when nothing else is due."""
+    fresh = _real_problem(1, "fresh", solved=False, last_solved=None)
+
+    result = _suggest_from([fresh], revisions=1, backlog=1, monkeypatch=monkeypatch)
+
+    assert result["revisions"] == []
+    assert [p.problem_id for p in result["backlog"]] == ["fresh"]
+
+
+def test_revision_limit_applies_after_filtering(monkeypatch):
+    """Never-attempted problems ranked ahead don't crowd real revisions out of the limit."""
+    today = date.today()
+    fresh = [_real_problem(i, f"fresh-{i}", solved=False, last_solved=None) for i in range(1, 4)]
+    due = _real_problem(9, "zz-due", solved=True, last_solved=today - timedelta(days=1), interval_days=1)
+
+    result = _suggest_from([*fresh, due], revisions=1, backlog=0, monkeypatch=monkeypatch)
+
+    assert [p.problem_id for p in result["revisions"]] == ["zz-due"]

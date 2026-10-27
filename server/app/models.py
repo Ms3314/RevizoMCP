@@ -42,6 +42,13 @@ class Attempt(Base):
     solved: Mapped[bool] = mapped_column(Boolean, nullable=False)
     mistakes: Mapped[str] = mapped_column(Text, nullable=False, default="")
     mistake_tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    # The coach's read of the user's code / answers, kept apart from `mistakes`
+    # (which quotes the user). e.g. "left = mid never shrinks the window".
+    diagnosis: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # Fine-grained weak concepts, lowercased: ["binary search bounds"].
+    concepts: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    # "slip" (could explain the fix when asked) | "gap" (couldn't) | NULL (not probed).
+    weakness_kind: Mapped[str | None] = mapped_column(String, nullable=True)
     # LeetCode's unique submission id, when this attempt IS a synced submission.
     # NULL for manual attempts (sittings reported in chat, non-LeetCode problems).
     # The unique constraint doubles as the sync-dedup index.

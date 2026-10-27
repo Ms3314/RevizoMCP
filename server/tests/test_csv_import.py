@@ -5,10 +5,17 @@ dependency overrides, matching the conventions in test_web.py.
 """
 
 import json
+from pathlib import Path
 
 import pytest
 
+from app.api import routes as api_routes
 from app.web.csv_import import Skip, parse_csv
+
+# /app/import is SPA-owned once web/dist is built into server/static. See note in
+# test_web.py — the page-render test below is skipped without a build.
+_SPA_BUILT = (Path(__file__).resolve().parents[1] / "static" / "index.html").exists()
+skip_if_no_spa = pytest.mark.skipif(not _SPA_BUILT, reason="SPA not built; run `make build`")
 
 
 def _csv(*rows: str) -> str:
@@ -124,18 +131,20 @@ def test_first_column_mapping_wins_on_duplicate_match():
 def web_client():
     from fastapi.testclient import TestClient
 
+    from app.api import deps as api_deps
     from app.web.deps import require_user
     from main import app
     from tests.test_web import USER
 
     app.dependency_overrides[require_user] = lambda: USER
+    app.dependency_overrides[api_deps.get_api_user] = lambda: USER
     yield TestClient(app)
     app.dependency_overrides.clear()
 
 
 @pytest.fixture()
 def fake_db(monkeypatch):
-    """Replace routes.SessionLocal with a no-op session and capture service calls."""
+    """Replace the API module's SessionLocal with a no-op session and capture service calls."""
     added = []
 
     def _add(session, user_id, **kw):
@@ -156,22 +165,23 @@ def fake_db(monkeypatch):
         def close(self):
             pass
 
-    from app.web import routes
-
-    monkeypatch.setattr(routes, "SessionLocal", _FakeSession)
-    monkeypatch.setattr(routes.service, "add_problem", _add)
+    monkeypatch.setattr(api_routes, "SessionLocal", _FakeSession)
+    monkeypatch.setattr(api_routes.service, "add_problem", _add)
     return added
 
 
-def test_import_page_renders_when_signed_in(web_client):
+@skip_if_no_spa
+def test_import_page_serves_spa_shell(web_client):
+    # /app/import is SPA-owned; the import form/flow lives client-side in Phase 2.
+    # The actual import endpoint (POST /api/import, SSE) is exercised below.
     r = web_client.get("/app/import")
     assert r.status_code == 200
-    assert "Import problems" in r.text
+    assert '<div id="root"></div>' in r.text
 
 
 def test_import_rejects_non_csv(web_client):
     r = web_client.post(
-        "/app/import", files={"file": ("problems.txt", b"hello", "text/plain")}
+        "/api/import", files={"file": ("problems.txt", b"hello", "text/plain")}
     )
     assert r.status_code == 400
     assert "Only .csv" in r.text
@@ -186,7 +196,7 @@ def test_import_end_to_end_summary(web_client, fake_db):
         ",https://x.com/orphan",
     )
     r = web_client.post(
-        "/app/import", files={"file": ("problems.csv", csv.encode(), "text/csv")}
+        "/api/import", files={"file": ("problems.csv", csv.encode(), "text/csv")}
     )
     assert r.status_code == 200
     # Parse SSE events
@@ -211,7 +221,7 @@ def test_import_end_to_end_summary(web_client, fake_db):
 def test_import_reports_no_importable_rows(web_client, fake_db):
     csv = _csv("Problem,Link\n,https://x.com/orphan\n")
     r = web_client.post(
-        "/app/import", files={"file": ("problems.csv", csv.encode(), "text/csv")}
+        "/api/import", files={"file": ("problems.csv", csv.encode(), "text/csv")}
     )
     assert r.status_code == 400
     assert "No importable problems" in r.text

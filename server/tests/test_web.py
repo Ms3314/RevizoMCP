@@ -7,6 +7,7 @@ bridge is exercised with self-minted JWTs from app.jwtauth.
 
 import urllib.parse
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -16,6 +17,13 @@ from app import jwtauth, service
 from app.models import Problem
 from app.web.deps import SESSION_COOKIE, UserContext, require_user
 from main import app
+
+# /app is owned by the React SPA. Once web/dist is built into server/static the
+# server returns the SPA shell; without a build it falls through to the (legacy)
+# Jinja route. Page-render tests below assert the SPA shell and are skipped when
+# the SPA hasn't been built, so the backend suite stays green in a clean checkout.
+_SPA_BUILT = (Path(__file__).resolve().parents[1] / "static" / "index.html").exists()
+skip_if_no_spa = pytest.mark.skipif(not _SPA_BUILT, reason="SPA not built; run `make build`")
 
 CLIENT = SimpleNamespace(client_id="web_test")
 USER = UserContext(id=1, email="dev@example.com", display_name="dev")
@@ -29,6 +37,16 @@ def client():
 @pytest.fixture()
 def signed_in():
     app.dependency_overrides[require_user] = lambda: USER
+    yield
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def api_signed_in():
+    from app.api import deps as api_deps
+
+    app.dependency_overrides[require_user] = lambda: USER
+    app.dependency_overrides[api_deps.get_api_user] = lambda: USER
     yield
     app.dependency_overrides.clear()
 
@@ -102,11 +120,11 @@ def test_docs_index_lists_sections(client):
     assert "/docs/leetcode-import" in r.text
 
 
-def test_leetcode_settings_save_cookie_encrypted(signed_in, client, monkeypatch):
+def test_leetcode_settings_save_cookie_encrypted(api_signed_in, client, monkeypatch):
     from cryptography.fernet import Fernet
 
     from app import models
-    import app.web.routes as routes
+    import app.api.routes as api_routes
 
     cookie = "sensitive-leetcode-session-value"
     account = models.User(
@@ -131,19 +149,19 @@ def test_leetcode_settings_save_cookie_encrypted(signed_in, client, monkeypatch)
         def commit(self):
             pass
 
-    monkeypatch.setattr(routes, "SessionLocal", FakeSession)
+    monkeypatch.setattr(api_routes, "SessionLocal", FakeSession)
     response = client.post(
-        "/app/leetcode/settings",
-        data={"username": "my-handle", "session_cookie": cookie},
+        "/api/leetcode/settings",
+        json={"username": "my-handle", "session_cookie": cookie},
     )
 
     assert response.status_code == 200
     assert cookie not in response.text
     assert account.leetcode_username == "my-handle"
     assert account.leetcode_session.startswith("fernet:v1:")
-    assert "Connected" in response.text
-    assert 'id="leetcode-import-loading"' in response.text
-    assert "Finding your solved problems" in response.text
+    body = response.json()
+    assert body["connected"] is True
+    assert body["username"] == "my-handle"
 
 
 def test_docs_do_not_use_the_app_shell(client):
@@ -153,6 +171,16 @@ def test_docs_do_not_use_the_app_shell(client):
     assert "Dashboard" not in r.text.split("<main")[1].split("</main>")[0]
 
 
+@skip_if_no_spa
+def test_docs_are_not_shadowed_by_spa(client):
+    # With the SPA built, /docs/* must still reach the Jinja docs, not the SPA
+    # shell (whose router has no docs routes and would render its 404).
+    for path in ("/docs", "/docs/connect", "/docs/connect/cursor"):
+        r = client.get(path)
+        assert r.status_code == 200, path
+        assert '<div id="root"></div>' not in r.text, f"{path} served the SPA shell"
+
+
 def test_landing_shows_google_sign_in_when_configured(client, monkeypatch):
     monkeypatch.setattr("app.web.routes.SUPABASE_URL", "https://sup.example")
     monkeypatch.setattr("app.web.routes.SUPABASE_ANON_KEY", "anon-key")
@@ -160,10 +188,14 @@ def test_landing_shows_google_sign_in_when_configured(client, monkeypatch):
     assert "Continue with Google" in r.text
 
 
-def test_dashboard_redirects_anonymous(client):
+@skip_if_no_spa
+def test_dashboard_serves_spa_shell(client):
+    # /app is owned by the React SPA: the server returns the SPA shell and
+    # auth-gating happens client-side (RequireAuth -> /login). The old 303
+    # server redirect is replaced by the /api/me check added in Phase 1.
     r = client.get("/app", follow_redirects=False)
-    assert r.status_code == 303
-    assert r.headers["location"] == "/login"
+    assert r.status_code == 200
+    assert '<div id="root"></div>' in r.text
 
 
 def test_login_starts_oauth_flow(client, monkeypatch):
@@ -209,47 +241,14 @@ def test_auth_callback_mints_session(client, monkeypatch):
     assert claims["sub"] == "1"
 
 
-def test_dashboard_renders_stats_and_timeline(signed_in, monkeypatch, client):
-    problems = [
-        _problem(),
-        _problem(
-            id=2,
-            problem_id="Coin Change",
-            difficulty="hard",
-            solved=True,
-            topics=["dp"],
-            last_solved=date(2026, 9, 20),
-            interval_days=7,
-            repetitions=2,
-        ),
-    ]
-    data = {
-        "problems": problems,
-        "stats": {
-            "total": 2,
-            "solved": 1,
-            "backlog": 1,
-            "due_today": 1,
-            "by_difficulty": {"easy": 1, "medium": 0, "hard": 1},
-        },
-        "due_problems": [problems[0]],
-        "watch_outs": {problems[0].id: "you did an off-by-one here"},
-        "weak": {},
-        "history": {p.id: [] for p in problems},
-    }
-    monkeypatch.setattr(
-        service,
-        "dashboard_data",
-        lambda s, uid, today=None, due_limit=10, weak_limit=5: data,
-    )
-
+@skip_if_no_spa
+def test_dashboard_serves_spa_shell(client):
+    # The live dashboard data is fetched client-side from /api/dashboard (Phase 1).
+    # Here we only assert the SPA shell is served; the old Jinja content assertions
+    # move to an /api/dashboard test once the endpoint exists.
     r = client.get("/app")
     assert r.status_code == 200
-    assert "Two Sum" in r.text
-    assert "Coin Change" in r.text
-    assert "Due today" in r.text
-    assert "off-by-one" in r.text  # due-today watch-out
-    assert "Weak points" in r.text
+    assert '<div id="root"></div>' in r.text
 
 
 def test_dashboard_data_matches_per_page_helpers():
@@ -307,20 +306,20 @@ def test_dashboard_data_matches_per_page_helpers():
         assert srs.is_due(p1.last_solved, p1.interval_days, p1.solved, today)  # sanity
 
 
-def test_add_problem_duplicate_shows_inline_error(signed_in, monkeypatch, client):
+def test_add_problem_duplicate_shows_inline_error(api_signed_in, monkeypatch, client):
     def duplicate(session, user_id, **kw):
         raise ValueError("Problem 'Two Sum' already exists")
 
     monkeypatch.setattr(service, "add_problem", duplicate)
     r = client.post(
-        "/app/problems/new",
-        data={"title": "Two Sum", "difficulty": "easy", "topics": "", "link": "", "description": ""},
+        "/api/problems",
+        json={"title": "Two Sum", "difficulty": "easy", "topics": "", "link": "", "description": ""},
     )
     assert r.status_code == 400
     assert "already exists" in r.text
 
 
-def test_add_problem_success_redirects(signed_in, monkeypatch, client):
+def test_add_problem_success(api_signed_in, monkeypatch, client):
     calls = {}
 
     def fake_add(session, user_id, **kw):
@@ -328,23 +327,22 @@ def test_add_problem_success_redirects(signed_in, monkeypatch, client):
 
     monkeypatch.setattr(service, "add_problem", fake_add)
     r = client.post(
-        "/app/problems/new",
-        data={
+        "/api/problems",
+        json={
             "title": "Longest Consecutive Sequence",
             "difficulty": "medium",
             "topics": "arrays, hashing",
             "link": "https://leetcode.com/problems/longest-consecutive-sequence/",
             "description": "",
         },
-        follow_redirects=False,
     )
-    assert r.status_code == 303
-    assert r.headers["location"] == "/app"
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
     assert calls["problem_id"] == "Longest Consecutive Sequence"
     assert calls["topics"] == ["arrays", "hashing"]
 
 
-def test_add_problem_requires_title(signed_in, client):
-    r = client.post("/app/problems/new", data={"title": "  "})
+def test_add_problem_requires_title(api_signed_in, client):
+    r = client.post("/api/problems", json={"title": "  "})
     assert r.status_code == 400
     assert "title" in r.text.lower()

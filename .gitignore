@@ -45,3 +45,10 @@ Striver A2Z Tracker *.csv
 
 .python-version 
 uv.lock
+
+# Node / React frontend (web/)
+node_modules/
+web/dist/
+server/static/        # generated React build, copied from web/dist
+*.tsbuildinfo
+npm-debug.log*

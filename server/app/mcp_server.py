@@ -26,6 +26,8 @@ MISTAKE_TAG = Literal[
 
 Difficulty = Literal["easy", "medium", "hard"]
 
+WeaknessKind = Literal["slip", "gap"]
+
 mcp = MCPServer(
     name="Revizo",
     title="Revizo - DSA Revision Coach",
@@ -127,6 +129,9 @@ def record_attempt(
     solved: bool,
     mistakes: str | None = None,
     mistake_tags: list[MISTAKE_TAG] | None = None,
+    diagnosis: str | None = None,
+    concepts: list[str] | None = None,
+    weakness_kind: WeaknessKind | None = None,
     ctx: Context = None,
 ) -> str:
     """Record ONE attempt on a problem and RESCHEDULE it - MUTATING tool.
@@ -136,17 +141,26 @@ def record_attempt(
     solved=true advances the revision ladder; solved=false resets to ~1 day and brings the problem back to
     tomorrow's due list carrying mistakes as watch_out. mistakes: quote the user's own words. mistake_tags:
     structured patterns chosen ONLY from this vocabulary: complexity_tle, edge_cases, off_by_one, overflow,
-    misread_constraints, wrong_ds, math_error, implementation_bug, other. Repeating a past tag triggers a warning."""
+    misread_constraints, wrong_ds, math_error, implementation_bug, other. Repeating a past tag triggers a warning.
+    CODE DIAGNOSIS fields - fill them whenever you read the user's code (stuck OR solved):
+    diagnosis: YOUR one-line observation of what the code got wrong or fragile, specific
+    ('left = mid never shrinks the window'), never the fix. concepts: 1-3 short lowercase
+    concept names the weakness lives in ('binary search bounds', 'dp base case') - reuse names
+    you have seen in this user's history so they aggregate. weakness_kind: 'slip' if the user
+    explained the fix themselves when you asked, 'gap' if they could not; omit if you never asked.
+    A concept already seen on another problem triggers a warning."""
     user_id = _current_user_id(ctx)
     try:
         
         def record(session):
             result = service.record_attempt(
-                session, user_id, problem_id, solved, mistakes, mistake_tags
+                session, user_id, problem_id, solved, mistakes, mistake_tags,
+                diagnosis=diagnosis, concepts=concepts, weakness_kind=weakness_kind,
             )
             return {
                 "problem": _dump_problem(session, user_id, result["problem"]),
                 "repeated_tags": result["repeated_tags"],
+                "repeated_concepts": result["repeated_concepts"],
             }
 
         data = _with_session(record)
@@ -154,6 +168,11 @@ def record_attempt(
         return f"Error: {e}"
 
     text = json.dumps(data)
+    if data["repeated_concepts"]:
+        text = (
+            f"RECURRING WEAKNESS: {', '.join(data['repeated_concepts'])} has come up on other problems "
+            f"before - tell the user this is a pattern, not a one-off. {text}"
+        )
     if data["repeated_tags"]:
         text = (
             f"WARNING: you are repeating mistake patterns: {', '.join(data['repeated_tags'])}. "
@@ -219,6 +238,9 @@ def get_problem(problem_id: str, ctx: Context = None) -> str:
                 "solved": a.solved,
                 "mistakes": a.mistakes,
                 "tags": a.mistake_tags,
+                "diagnosis": a.diagnosis,
+                "concepts": a.concepts,
+                "weakness_kind": a.weakness_kind,
             }
             for a in service.get_attempt_history(session, user_id, problem) # seperate table for this
         ] # this is getting all the previous miskes that was done on this problem
@@ -266,12 +288,20 @@ def revision_stats(ctx: Context = None) -> str:
 # this one might require some leetcode sessions , so maybe normally i wont be getting the leetcode session id thingy 
 @mcp.tool()
 def get_common_mistakes(limit: int = 5, ctx: Context = None) -> str:
-    """Ranked mistake patterns across ALL the user's attempts - their known weak points,
-    with counts, last-seen dates and recent example problems.
-    Use when: BEFORE starting a new problem (warn proactively) or when the user asks what they
-    keep doing wrong. Read-only."""
+    """The user's known weak points across ALL attempts: mistake_patterns (fixed tags with
+    counts, last-seen dates, example problems) and weak_concepts (concepts diagnosed from
+    their code; 'gaps' counts the times they could not explain the fix - rank those first).
+    Use when: BEFORE starting a new problem (warn proactively), when the user asks what they
+    keep doing wrong, or to reuse existing concept names before recording a diagnosis. Read-only."""
     user_id = _current_user_id(ctx)
-    return json.dumps(_with_session(lambda s: service.get_common_mistakes(s, user_id, limit)))
+
+    def get(session):
+        return {
+            "mistake_patterns": service.get_common_mistakes(session, user_id, limit),
+            "weak_concepts": service.get_weak_concepts(session, user_id, limit),
+        }
+
+    return json.dumps(_with_session(get))
 
 
 @mcp.tool()

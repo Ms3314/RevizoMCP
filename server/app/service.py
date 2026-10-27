@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -21,6 +21,9 @@ MISTAKE_TAGS = frozenset(
         "other",
     }
 )
+
+WEAKNESS_KINDS = frozenset({"slip", "gap"})
+MAX_CONCEPTS = 5
 
 
 def add_problem(
@@ -61,6 +64,9 @@ def record_attempt(
     mistakes: str | None,
     mistake_tags: list[str] | None = None,
     today: date | None = None,
+    diagnosis: str | None = None,
+    concepts: list[str] | None = None,
+    weakness_kind: str | None = None,
 ) -> dict:
     problem = _get(session, user_id, problem_id) # 
     if problem is None:
@@ -69,6 +75,10 @@ def record_attempt(
     today = today or date.today()
     tags = _normalize_tags(mistake_tags)
     repeated_tags = _detect_repeated_tags(session, user_id, problem, tags)
+    concepts = _normalize_concepts(concepts)
+    repeated_concepts = _detect_repeated_concepts(session, user_id, concepts)
+    kind = (weakness_kind or "").strip().lower()
+    kind = kind if kind in WEAKNESS_KINDS else None
 
     problem.solved = bool(solved)
     problem.last_solved = today
@@ -89,10 +99,17 @@ def record_attempt(
             solved=bool(solved),
             mistakes=mistakes or "",
             mistake_tags=tags,
+            diagnosis=(diagnosis or "").strip(),
+            concepts=concepts,
+            weakness_kind=kind,
         )
     )
     session.flush()
-    return {"problem": problem, "repeated_tags": repeated_tags}
+    return {
+        "problem": problem,
+        "repeated_tags": repeated_tags,
+        "repeated_concepts": repeated_concepts,
+    }
 
 
 def get_attempt_history(session: Session, user_id: int, problem: Problem) -> list[Attempt]:
@@ -117,15 +134,23 @@ def build_watch_out(session: Session, user_id: int, problem: Problem) -> str | N
 
 def _watch_out_from_history(history: list[Attempt]) -> str | None:
     # most recent attempt that actually carries mistakes or tags
-    candidates = [a for a in reversed(history) if a.mistakes or a.mistake_tags]
+    candidates = [
+        a for a in reversed(history)
+        if a.mistakes or a.mistake_tags or a.diagnosis or a.concepts
+    ]
     if not candidates:
         return None
     attempt = candidates[0]
     parts = []
     if attempt.mistake_tags:
         parts.append(f"mistake patterns: {', '.join(attempt.mistake_tags)}")
+    if attempt.concepts:
+        kind = f" ({attempt.weakness_kind})" if attempt.weakness_kind else ""
+        parts.append(f"weak concepts{kind}: {', '.join(attempt.concepts)}")
     if attempt.mistakes:
         parts.append(f'notes: "{attempt.mistakes}"')
+    if attempt.diagnosis:
+        parts.append(f'coach saw: "{attempt.diagnosis}"')
     if not parts:
         return None
     return (
@@ -176,6 +201,54 @@ def _normalize_tags(tags: list[str] | None) -> list[str]:
     return normalized
 
 
+def _normalize_concepts(concepts: list[str] | None) -> list[str]:
+    normalized = []
+    for concept in concepts or []:
+        c = " ".join((concept or "").lower().split())[:60]
+        if c and c not in normalized:
+            normalized.append(c)
+    return normalized[:MAX_CONCEPTS]
+
+
+def _detect_repeated_concepts(session: Session, user_id: int, new_concepts: list[str]) -> list[str]:
+    # Unlike tags, concepts are checked across ALL problems: the same weak
+    # concept showing up on a different problem is the signal worth surfacing.
+    if not new_concepts:
+        return []
+    previous: set[str] = set()
+    for concepts in session.scalars(select(Attempt.concepts).where(Attempt.user_id == user_id)):
+        previous.update(concepts or [])
+    return [c for c in new_concepts if c in previous]
+
+
+def get_weak_concepts(session: Session, user_id: int, limit: int = 5) -> dict[str, dict]:
+    """Concepts the coach diagnosed, ranked by how often they recur."""
+    problems = {p.id: p.problem_id for p in session.scalars(
+        select(Problem).where(Problem.user_id == user_id)
+    ).all()}
+    stats: dict[str, dict] = {}
+    attempts = session.scalars(
+        select(Attempt).where(Attempt.user_id == user_id).order_by(Attempt.attempt_date)
+    ).all()
+    for attempt in attempts:
+        for concept in attempt.concepts or []:
+            entry = stats.setdefault(
+                concept, {"count": 0, "gaps": 0, "last_seen": "", "problems": []}
+            )
+            entry["count"] += 1
+            entry["gaps"] += attempt.weakness_kind == "gap"
+            entry["last_seen"] = max(entry["last_seen"], attempt.attempt_date.isoformat())
+            name = problems.get(attempt.problem_pk, "?")
+            if name not in entry["problems"]:
+                entry["problems"].append(name)
+    ranked = dict(
+        sorted(stats.items(), key=lambda kv: (-kv[1]["gaps"], -kv[1]["count"], kv[0]))[:limit]
+    )
+    for entry in ranked.values():
+        entry["problems"] = entry["problems"][-3:]
+    return ranked
+
+
 def _detect_repeated_tags(session: Session, user_id: int, problem: Problem, new_tags: list[str]) -> list[str]:
     if not new_tags:
         return []
@@ -185,7 +258,7 @@ def _detect_repeated_tags(session: Session, user_id: int, problem: Problem, new_
     return [t for t in new_tags if t in previous]
 
 
-def get_due_problems(session: Session, user_id: int, today: date | None = None, limit: int = 10) -> list[Problem]:
+def get_due_problems(session: Session, user_id: int, today: date | None = None, limit: int | None = 10) -> list[Problem]:
     today = today or date.today()
     candidates = [
         p
@@ -359,11 +432,19 @@ def get_suggested_problems(
     today = today or date.today()
     strategy = get_strategy(session, user_id)
 
-    # Fetch revisions (due problems via SRS)
-    revisions = get_due_problems(session, user_id, today, limit=strategy.revisions_per_session)
+    # Fetch revisions (due problems via SRS). is_due() also counts never-attempted
+    # problems as due, but those are fresh material, not revisions - keep only
+    # problems with at least one attempt (last_solved is set on every attempt).
+    revisions = [
+        p for p in get_due_problems(session, user_id, today, limit=None)
+        if p.last_solved is not None
+    ][:strategy.revisions_per_session]
 
-    # Fetch backlog problems (unsolved, prioritizing weak topics)
-    backlog = get_backlog(session, user_id)
+    # Fetch backlog problems (unsolved, prioritizing weak topics). A failed
+    # problem is both due and unsolved; once it is suggested as a revision it
+    # must not be suggested again as backlog.
+    revision_ids = {p.id for p in revisions}
+    backlog = [p for p in get_backlog(session, user_id) if p.id not in revision_ids]
     
     # Identify weak topics from mistake tags
     weak_topics = _get_weak_topics(session, user_id)
@@ -428,3 +509,97 @@ def _priority(p: Problem, today: date) -> tuple:
 def _normalize_difficulty(difficulty: str) -> str:
     d = (difficulty or "medium").lower()
     return d if d in DIFFICULTY_RANK else "medium"
+
+
+def solved_today_counts(session: Session, user_id: int, today: date | None = None) -> tuple[int, int]:
+    """How many problems solved today count as 'old' (reviewed) vs 'new' (first solve)."""
+    today = today or date.today()
+    attempts_today = session.scalars(
+        select(Attempt).where(
+            Attempt.user_id == user_id,
+            Attempt.attempt_date == today,
+            Attempt.solved.is_(True),
+        )
+    ).all()
+    old = 0
+    new = 0
+    for a in attempts_today:
+        prior = session.scalars(
+            select(Attempt).where(
+                Attempt.user_id == user_id,
+                Attempt.problem_pk == a.problem_pk,
+                Attempt.attempt_date < today,
+            )
+        ).first()
+        if prior is None:
+            new += 1
+        else:
+            old += 1
+    return old, new
+
+
+def streak_info(session: Session, user_id: int, days: int = 120, today: date | None = None) -> dict:
+    """LeetCode-style streak: current + longest run, plus a per-day solve count grid."""
+    today = today or date.today()
+    solved_days: set[date] = set()
+    counts: dict[date, int] = {}
+    attempts = session.scalars(
+        select(Attempt).where(Attempt.user_id == user_id, Attempt.solved.is_(True))
+    ).all()
+    for a in attempts:
+        solved_days.add(a.attempt_date)
+        counts[a.attempt_date] = counts.get(a.attempt_date, 0) + 1
+
+    # Current streak walks backwards from today; an unstarted *today* doesn't break it.
+    cur = 0
+    d = today
+    if d not in solved_days:
+        d = d - timedelta(days=1)
+    while d in solved_days:
+        cur += 1
+        d = d - timedelta(days=1)
+
+    longest = 0
+    run = 0
+    for i in range(days):
+        dd = today - timedelta(days=(days - 1 - i))
+        if dd in solved_days:
+            run += 1
+            longest = max(longest, run)
+        else:
+            run = 0
+
+    grid = []
+    for i in range(days):
+        dd = today - timedelta(days=(days - 1 - i))
+        grid.append({"date": dd.isoformat(), "count": counts.get(dd, 0)})
+    return {"current": cur, "longest": longest, "days": grid}
+
+
+def build_study_plan(session: Session, user_id: int, today: date | None = None) -> dict:
+    """Daily plan: old (revision) + new (backlog) targets, today's progress, suggestions, streak."""
+    today = today or date.today()
+    strategy = get_strategy(session, user_id)
+    suggested = get_suggested_problems(session, user_id, today)
+    old_solved, new_solved = solved_today_counts(session, user_id, today)
+
+    old_target = strategy.revisions_per_session
+    new_target = strategy.backlog_per_session
+    old_remaining = max(0, old_target - old_solved)
+    new_remaining = max(0, new_target - new_solved)
+
+    return {
+        "settings": {
+            "revisions_per_session": old_target,
+            "backlog_per_session": new_target,
+        },
+        "old_target": old_target,
+        "old_solved_today": old_solved,
+        "new_target": new_target,
+        "new_solved_today": new_solved,
+        # Suggest only what's still outstanding today (natural carryover of misses).
+        "old_suggestions": suggested["revisions"][:old_remaining],
+        "new_suggestions": suggested["backlog"][:new_remaining],
+        "weak_topics": suggested["weak_topics"],
+        "streak": streak_info(session, user_id, today=today),
+    }

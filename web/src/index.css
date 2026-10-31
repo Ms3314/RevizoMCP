@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/* Design tokens — mirror the old base.html palette (zinc-950 background, etc.) */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html {
+  font-feature-settings: "cv02", "cv03", "cv04";
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #09090b;
+  color: #e4e4e7;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 8px;
+  border: 2px solid #09090b;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Docs typography helpers (ported from base.html) */
+.doc-p {
+  margin-top: 0.75rem;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: #a1a1aa;
+}
+.doc-h2 {
+  padding-top: 2.5rem;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f4f4f5;
+}
+.doc-li {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 0.625rem;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #a1a1aa;
+}
+.doc-li::before {
+  content: "";
+  margin-top: 8px;
+  height: 3px;
+  width: 3px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: #52525b;
+}
+.doc-strong {
+  color: #f4f4f5;
+  font-weight: 500;
+}
+
+/* Docs prose (mirrors the old server templates so content looks identical) */
+.doc-p {
+  margin-top: 0.75rem;
+  font-size: 13.5px;
+  line-height: 1.75;
+  color: #a1a1aa;
+}
+.doc-h2 {
+  padding-top: 2.5rem;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f4f4f5;
+}
+.doc-li {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 0.625rem;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #a1a1aa;
+}
+.doc-li::before {
+  content: "";
+  margin-top: 8px;
+  height: 3px;
+  width: 3px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: #52525b;
+}
+
+/* Shared form control styling */
+@layer components {
+  .input {
+    @apply w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none;
+  }
+}
